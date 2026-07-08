@@ -1,0 +1,4 @@
+-r base.txt
+
+channels-redis>=4.2,<5.0
+uvicorn[standard]>=0.34,<1.0

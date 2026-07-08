@@ -1,0 +1,4 @@
+-r base.txt
+
+# Serves ASGI (HTTP + WebSocket) through `manage.py runserver` in development.
+daphne>=4.2,<5.0

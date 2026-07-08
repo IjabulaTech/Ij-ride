@@ -1,0 +1,315 @@
+from decimal import Decimal
+from unittest import mock
+
+from django.core.cache import cache
+from django.test import SimpleTestCase, override_settings
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from apps.accounts.services import register_passenger
+
+from .base import AddressNotFoundError, GeoServiceError
+from .providers.mapbox import MapboxGeoProvider
+from .providers.stub import StubGeoProvider
+from .service import _provider_for, get_geo_provider
+from .utils import haversine_m
+
+PASSWORD = "str0ng-Pass-2026"
+
+
+class HaversineTests(SimpleTestCase):
+    def test_known_distance(self):
+        # American University of Nigeria (9.3345, 12.4944) to Modibbo Adama
+        # University (9.2028, 12.4810) in Yola is ~14.7 km straight-line.
+        distance = haversine_m(9.3345, 12.4944, 9.2028, 12.4810)
+        self.assertTrue(14_000 < distance < 15_500, distance)
+
+    def test_zero_distance(self):
+        self.assertEqual(haversine_m(9.2035, 12.4954, 9.2035, 12.4954), 0)
+
+
+class StubProviderTests(SimpleTestCase):
+    def setUp(self):
+        self.provider = StubGeoProvider()
+
+    def test_geocode_is_deterministic_and_near_yola_center(self):
+        a = self.provider.geocode("Jimeta Modern Market")
+        b = self.provider.geocode("jimeta modern market")  # case-insensitive same point
+        self.assertEqual((a.lat, a.lng), (b.lat, b.lng))
+        # Yola sits at ~9.20 N, 12.50 E; stub spread is ~±0.09 around it
+        self.assertTrue(Decimal("9.05") < a.lat < Decimal("9.35"), a.lat)
+        self.assertTrue(Decimal("12.35") < a.lng < Decimal("12.65"), a.lng)
+
+    def test_route_applies_road_factor_and_speed(self):
+        route = self.provider.route(
+            (Decimal("9.3345"), Decimal("12.4944")),
+            (Decimal("9.2028"), Decimal("12.4810")),
+        )
+        straight = haversine_m("9.3345", "12.4944", "9.2028", "12.4810")
+        self.assertEqual(route.distance_m, round(straight * 1.4))
+        self.assertGreater(route.duration_s, 0)
+
+    def test_suggest_returns_yola_gazetteer_hits(self):
+        results = self.provider.suggest("Jimeta", limit=5)
+        self.assertGreater(len(results), 0)
+        self.assertTrue(all("Adamawa" in s.address for s in results))
+        # Case-insensitive
+        self.assertEqual(len(self.provider.suggest("jimeta")), len(results))
+
+    def test_suggest_resolves_local_acronyms(self):
+        for query, expected_label in (
+            ("AUN", "American University"),
+            ("aun", "American University"),
+            ("FMC", "Federal Medical Centre"),
+            ("MAU", "Modibbo Adama"),
+        ):
+            results = self.provider.suggest(query, limit=3)
+            self.assertTrue(results, f"no results for {query!r}")
+            self.assertIn(expected_label, results[0].label)
+            self.assertTrue(results[0].place_type)  # populated
+            self.assertTrue(results[0].place_name)
+
+    def test_suggest_falls_back_deterministically(self):
+        # Not in the gazetteer -> stub returns a Yola-labeled fallback
+        results = self.provider.suggest("completely-made-up-place-xyz")
+        self.assertEqual(len(results), 1)
+        self.assertIn("Yola, Adamawa", results[0].address)
+
+    def test_suggest_empty_query(self):
+        self.assertEqual(self.provider.suggest(""), [])
+
+    def test_reverse_geocode_near_known_place(self):
+        # AUN is in the gazetteer; a pin near it should be labelled "Near …"
+        result = self.provider.reverse_geocode(Decimal("9.3350"), Decimal("12.4948"))
+        self.assertIn("American University of Nigeria", result.address)
+        self.assertEqual(result.lat, Decimal("9.3350"))
+
+    def test_reverse_geocode_far_from_gazetteer(self):
+        result = self.provider.reverse_geocode(Decimal("9.4000"), Decimal("13.0000"))
+        self.assertIn("Pinned location", result.address)
+
+
+class ProviderSelectionTests(SimpleTestCase):
+    def tearDown(self):
+        _provider_for.cache_clear()
+
+    @override_settings(GEO_PROVIDER="stub")
+    def test_stub_selected(self):
+        self.assertIsInstance(get_geo_provider(), StubGeoProvider)
+
+    @override_settings(GEO_PROVIDER="nonsense")
+    def test_unknown_provider_raises(self):
+        with self.assertRaises(ValueError):
+            get_geo_provider()
+
+
+@override_settings(MAPBOX_ACCESS_TOKEN="test-token", GEO_COUNTRY="NG", GEO_PROXIMITY="12.4954,9.2035")
+class MapboxProviderTests(SimpleTestCase):
+    def _response(self, payload, status=200):
+        resp = mock.Mock()
+        resp.status_code = status
+        resp.json.return_value = payload
+        return resp
+
+    def test_geocode_parses_feature(self):
+        provider = MapboxGeoProvider()
+        payload = {
+            "features": [
+                {"center": [12.494400, 9.334500], "place_name": "Yola, Adamawa, Nigeria"}
+            ]
+        }
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)) as m:
+            result = provider.geocode("Yola")
+        self.assertEqual(result.address, "Yola, Adamawa, Nigeria")
+        self.assertEqual(result.lat, Decimal("9.334500"))
+        self.assertEqual(result.lng, Decimal("12.494400"))
+        params = m.call_args.kwargs["params"]
+        self.assertEqual(params["country"], "NG")
+
+    def test_geocode_no_results_raises_not_found(self):
+        provider = MapboxGeoProvider()
+        with mock.patch.object(provider.session, "get", return_value=self._response({"features": []})):
+            with self.assertRaises(AddressNotFoundError):
+                provider.geocode("zzzz nowhere")
+
+    def test_route_parses_distance_and_duration(self):
+        provider = MapboxGeoProvider()
+        payload = {"code": "Ok", "routes": [{"distance": 10412.7, "duration": 1503.2}]}
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
+            route = provider.route(
+                (Decimal("9.3345"), Decimal("12.4944")),
+                (Decimal("9.2028"), Decimal("12.4810")),
+            )
+        self.assertEqual(route.distance_m, 10413)
+        self.assertEqual(route.duration_s, 1503)
+
+    def test_provider_error_on_http_failure(self):
+        provider = MapboxGeoProvider()
+        with mock.patch.object(provider.session, "get", return_value=self._response({}, status=500)):
+            with self.assertRaises(GeoServiceError):
+                provider.route(
+                    (Decimal("9.3345"), Decimal("12.4944")),
+                    (Decimal("9.2028"), Decimal("12.4810")),
+                )
+
+    def test_suggest_uses_autocomplete_bbox_types_language(self):
+        provider = MapboxGeoProvider()
+        # "Zerofoo" won't match the local POI dict so we exercise the Mapbox
+        # call path directly
+        payload = {
+            "features": [
+                {
+                    "center": [12.4473, 9.2611],
+                    "text": "Zerofoo Store",
+                    "place_name": "Zerofoo Store, Yola North, Adamawa, Nigeria",
+                    "place_type": ["poi"],
+                    "properties": {"category": "shopping"},
+                },
+            ]
+        }
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)) as m:
+            results = provider.suggest("Zerofoo", limit=5)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].label, "Zerofoo Store")
+        self.assertEqual(results[0].place_type, "shopping")
+        params = m.call_args.kwargs["params"]
+        self.assertEqual(params["autocomplete"], "true")
+        self.assertEqual(params["country"], "NG")
+        self.assertEqual(params["proximity"], "12.4954,9.2035")
+        self.assertEqual(params["bbox"], "11.3,7.4,13.7,11.4")
+        self.assertIn("poi", params["types"])
+        self.assertEqual(params["language"], "en")
+
+    def test_suggest_prefers_local_poi_over_mapbox(self):
+        provider = MapboxGeoProvider()
+        payload = {
+            "features": [
+                {
+                    "center": [3.3792, 6.5244],
+                    "text": "Lagos Aunty Cafe",
+                    "place_name": "Lagos Aunty Cafe, Lagos, Nigeria",
+                    "place_type": ["poi"],
+                },
+            ]
+        }
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
+            results = provider.suggest("AUN", limit=5)
+        # Local Yola POI must beat Mapbox's Lagos hit at the top
+        self.assertEqual(results[0].label, "American University of Nigeria")
+        self.assertNotIn("Lagos", results[0].address)
+
+    def test_suggest_uses_live_gps_as_proximity(self):
+        provider = MapboxGeoProvider()
+        with mock.patch.object(
+            provider.session, "get", return_value=self._response({"features": []})
+        ) as m:
+            provider.suggest("Zerofoo", limit=5, proximity=(Decimal("9.334500"), Decimal("12.494400")))
+        params = m.call_args.kwargs["params"]
+        # Mapbox expects "lng,lat"
+        self.assertEqual(params["proximity"], "12.494400,9.334500")
+
+    def test_suggest_swallows_provider_errors(self):
+        provider = MapboxGeoProvider()
+        with mock.patch.object(provider.session, "get", return_value=self._response({}, status=500)):
+            self.assertEqual(provider.suggest("anything"), [])
+
+    def test_reverse_geocode_parses_place(self):
+        provider = MapboxGeoProvider()
+        payload = {
+            "features": [
+                {"center": [12.4948, 9.3350], "place_name": "AUN, Yola, Adamawa, Nigeria"}
+            ]
+        }
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
+            result = provider.reverse_geocode(Decimal("9.3350"), Decimal("12.4948"))
+        self.assertIn("AUN", result.address)
+
+    def test_reverse_geocode_gracefully_falls_back(self):
+        provider = MapboxGeoProvider()
+        with mock.patch.object(provider.session, "get", return_value=self._response({}, status=500)):
+            result = provider.reverse_geocode(Decimal("9.20"), Decimal("12.50"))
+        self.assertIn("Pinned location", result.address)
+
+
+class GeoApiTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = register_passenger(phone="+2348031900001", password=PASSWORD)
+        self.client.force_authenticate(user=self.user)
+
+    def test_suggest_requires_auth(self):
+        self.client.force_authenticate(user=None)
+        resp = self.client.get(reverse("geo:suggest"), {"q": "Jimeta"})
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_suggest_returns_results_for_yola_query(self):
+        resp = self.client.get(reverse("geo:suggest"), {"q": "Jimeta"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        results = resp.data["results"]
+        self.assertGreater(len(results), 0)
+        for row in results:
+            self.assertIn("Adamawa", row["address"])
+            self.assertIn("lat", row)
+            self.assertIn("lng", row)
+            self.assertIn("place_name", row)
+            self.assertIn("place_type", row)
+
+    def test_suggest_partial_gps_pair_rejected(self):
+        resp = self.client.get(reverse("geo:suggest"), {"q": "Jimeta", "lat": "9.2"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_suggest_requires_query_param(self):
+        resp = self.client.get(reverse("geo:suggest"))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reverse_endpoint(self):
+        resp = self.client.get(
+            reverse("geo:reverse"), {"lat": "9.3350", "lng": "12.4948"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertIn("address", resp.data)
+        self.assertEqual(resp.data["lat"], "9.335000")
+
+
+class EstimateCoordinatePreservationTests(APITestCase):
+    """Coordinates from 'Use current location' must flow through unchanged
+    into the fare calculation — not silently replaced by geocoded points."""
+
+    def setUp(self):
+        cache.clear()
+        from apps.pricing.models import FareSetting
+
+        FareSetting.objects.create(
+            vehicle_category="CAR",
+            base_fare=Decimal("500"),
+            per_km=Decimal("120"),
+            per_minute=Decimal("15"),
+            minimum_fare=Decimal("700"),
+            rounding_step=Decimal("50"),
+            is_active=True,
+        )
+        self.user = register_passenger(phone="+2348031900002", password=PASSWORD)
+        self.client.force_authenticate(user=self.user)
+
+    def test_supplied_coordinates_are_used_verbatim(self):
+        pickup_lat, pickup_lng = "9.334500", "12.494400"
+        dropoff_lat, dropoff_lng = "9.202800", "12.481000"
+        resp = self.client.post(
+            reverse("rides:estimate"),
+            {
+                "vehicle_category": "CAR",
+                "pickup": {"address": "Current location", "lat": pickup_lat, "lng": pickup_lng},
+                "dropoff": {"address": "Modibbo Adama University", "lat": dropoff_lat, "lng": dropoff_lng},
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        # Backend must echo exactly the coords we sent (no stub re-geocode)
+        self.assertEqual(resp.data["pickup"]["lat"], pickup_lat)
+        self.assertEqual(resp.data["pickup"]["lng"], pickup_lng)
+        self.assertEqual(resp.data["dropoff"]["lat"], dropoff_lat)
+        self.assertEqual(resp.data["dropoff"]["lng"], dropoff_lng)
+        # Distance derived from those exact coords (~14.7 km straight-line -> ~20.6 km road)
+        self.assertGreater(resp.data["distance_m"], 18_000)
+        self.assertLess(resp.data["distance_m"], 23_000)

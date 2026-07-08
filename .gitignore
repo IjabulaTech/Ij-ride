@@ -1,0 +1,36 @@
+# Root safety net. The backend/ and frontend/ dirs have their own .gitignore
+# too; git applies all of them. This catches anything at the repo root and
+# guarantees secrets/artifacts never get committed.
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+**/.env
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node / Next
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Django artifacts
+backend/staticfiles/
+backend/media/
+db.sqlite3
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Scratch
+*.log

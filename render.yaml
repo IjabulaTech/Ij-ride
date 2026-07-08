@@ -1,0 +1,90 @@
+# Render Blueprint for the IJ Ride backend.
+# Deploy: Render dashboard -> New -> Blueprint -> point at this repo.
+# After the first deploy, set the sync:false values in the ijride-shared
+# env group and the web service (see DEPLOYMENT.md).
+
+envVarGroups:
+  - name: ijride-shared
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: SECRET_KEY
+        sync: false # set once, shared by web + cron (JWTs are signed with it)
+      - key: DEFAULT_COUNTRY_CODE
+        value: "+234"
+      - key: GEO_PROVIDER
+        value: mapbox # requires MAPBOX_ACCESS_TOKEN below; use "stub" for a keyless demo
+      - key: MAPBOX_ACCESS_TOKEN
+        sync: false # paste your Mapbox token in the Render dashboard
+      - key: GEO_COUNTRY
+        value: NG
+      - key: GEO_PROXIMITY
+        value: "12.4954,9.2035" # Yola, Adamawa (lng,lat)
+      - key: PUBLIC_BASE_URL
+        sync: false # e.g. https://ijride-api.onrender.com (for vehicle photo URLs)
+      - key: RIDE_SEARCH_TIMEOUT_MINUTES
+        value: "10"
+      - key: JWT_ACCESS_MINUTES
+        value: "60"
+      - key: JWT_REFRESH_DAYS
+        value: "30"
+
+databases:
+  - name: ijride-db
+    plan: basic-256mb # smallest paid tier; free tier expires after 30 days
+
+services:
+  - type: redis
+    name: ijride-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # internal connections only
+
+  - type: web
+    name: ijride-api
+    runtime: python
+    rootDir: backend
+    buildCommand: ./build.sh
+    startCommand: python -m uvicorn config.asgi:application --host 0.0.0.0 --port $PORT
+    plan: starter
+    healthCheckPath: /healthz/
+    envVars:
+      - fromGroup: ijride-shared
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ijride-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ijride-redis
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        sync: false # e.g. ijride-api.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false # e.g. https://ijride.vercel.app
+      - key: PYTHON_VERSION
+        value: "3.13"
+
+  - type: cron
+    name: ijride-expire-rides
+    runtime: python
+    rootDir: backend
+    schedule: "*/5 * * * *"
+    buildCommand: pip install -r requirements/prod.txt
+    startCommand: python manage.py expire_rides
+    envVars:
+      - fromGroup: ijride-shared
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ijride-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ijride-redis
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        value: localhost
+      - key: PYTHON_VERSION
+        value: "3.13"
