@@ -34,3 +34,9 @@ export const VEHICLE_CATEGORY_ICONS = {
   KEKE: "🛺",
   CAR: "🚗",
 } as const;
+
+/** Real vehicle photos for the ride-type selector (public/vehicle-icons). */
+export const VEHICLE_CATEGORY_IMAGES = {
+  KEKE: "/vehicle-icons/keke.jpg",
+  CAR: "/vehicle-icons/car.jpg",
+} as const;

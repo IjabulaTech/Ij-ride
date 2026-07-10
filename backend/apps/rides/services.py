@@ -366,7 +366,7 @@ def expire_stale_rides() -> int:
 # Queries: active ride, history, open feed
 # ---------------------------------------------------------------------------
 
-_RIDE_RELATED = ("passenger", "driver", "vehicle", "payment")
+_RIDE_RELATED = ("passenger", "driver", "driver__driver_profile", "vehicle", "payment")
 
 
 def active_ride_for(user) -> Ride | None:

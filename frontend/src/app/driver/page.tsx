@@ -16,6 +16,7 @@ import { ApiError } from "@/lib/api/client";
 import * as driverApi from "@/lib/api/driver";
 import { acceptRide, activeRide, openRides, rejectRide } from "@/lib/api/rides";
 import { useRideSocket } from "@/lib/hooks/useRideSocket";
+import { playBeep, unlockAudio } from "@/lib/sound";
 import type { DriverAvailability, DriverProfile, OpenRide, Ride, Vehicle } from "@/types/api";
 
 export default function DriverDashboard() {
@@ -35,9 +36,16 @@ export default function DriverDashboard() {
   const onlineRef = useRef(isOnline);
   onlineRef.current = isOnline;
 
+  // Dispatch ids we've already surfaced — drives the "new request" beep
+  // decision OUTSIDE any state updater (updaters must stay pure; React
+  // StrictMode double-invokes them, which would double-beep).
+  const seenRequestIds = useRef<Set<number>>(new Set());
+
   const refreshOpen = useCallback(async () => {
     try {
       const data = await openRides();
+      // Seed seen ids so pre-existing requests never trigger a late beep
+      data.results.forEach((r) => seenRequestIds.current.add(r.id));
       setRequests(data.results);
     } catch {
       /* fallback poll retries */
@@ -75,9 +83,13 @@ export default function DriverDashboard() {
   // Realtime dispatch feed
   const socketRef = useRideSocket((message) => {
     if (message.type === "dispatch.new_request") {
-      setRequests((prev) =>
-        prev.some((r) => r.id === message.ride.id) ? prev : [...prev, message.ride]
-      );
+      const id = message.ride.id;
+      // Decide the beep here (pure, ref-deduped) — not inside setState
+      if (!seenRequestIds.current.has(id)) {
+        seenRequestIds.current.add(id);
+        playBeep("alert"); // new request — attention-grabbing double beep
+      }
+      setRequests((prev) => (prev.some((r) => r.id === id) ? prev : [...prev, message.ride]));
     } else if (message.type === "dispatch.request_closed") {
       setRequests((prev) => prev.filter((r) => r.id !== message.ride_id));
     } else if (message.type === "connection.ready" && message.dispatch) {
@@ -116,6 +128,7 @@ export default function DriverDashboard() {
       const a = await driverApi.setAvailability(next);
       setAvailability(a);
       if (next) {
+        unlockAudio(); // going online is a user gesture — enable request beeps
         socketRef.current?.subscribeDispatch();
         await refreshOpen();
       } else {

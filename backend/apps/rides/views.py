@@ -86,7 +86,9 @@ class RideDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Ride.objects.select_related("passenger", "driver", "vehicle", "payment")
+        qs = Ride.objects.select_related(
+            "passenger", "driver", "driver__driver_profile", "vehicle", "payment"
+        )
         if user.is_admin_role:
             return qs
         if user.is_driver:

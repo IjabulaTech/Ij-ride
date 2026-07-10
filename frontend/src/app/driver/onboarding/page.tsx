@@ -20,6 +20,8 @@ const CATEGORIES: VehicleCategory[] = ["KEKE", "CAR"];
 export default function OnboardingPage() {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [license, setLicense] = useState("");
+  const [driverPhotoFile, setDriverPhotoFile] = useState<File | null>(null);
+  const [driverPhotoPreview, setDriverPhotoPreview] = useState<string | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileMsg, setProfileMsg] = useState<Message>(null);
 
@@ -47,6 +49,7 @@ export default function OnboardingPage() {
         if (cancelled) return;
         setProfile(p);
         setLicense(p.license_number);
+        setDriverPhotoPreview(p.photo_url);
         // Vehicle category is fixed by the driver's registered category in V1
         setCategory(p.driver_category);
         if (v) {
@@ -74,6 +77,12 @@ export default function OnboardingPage() {
     if (file) setPhotoPreview(URL.createObjectURL(file));
   }
 
+  function onDriverPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setDriverPhotoFile(file);
+    if (file) setDriverPhotoPreview(URL.createObjectURL(file));
+  }
+
   const setV = (key: keyof typeof vehicle) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setVehicle((prev) => ({ ...prev, [key]: e.target.value }));
 
@@ -82,9 +91,14 @@ export default function OnboardingPage() {
     setProfileBusy(true);
     setProfileMsg(null);
     try {
-      const updated = await driverApi.updateProfile({ license_number: license });
+      const updated = await driverApi.updateProfile({
+        license_number: license,
+        photo: driverPhotoFile,
+      });
       setProfile(updated);
-      setProfileMsg({ tone: "success", text: "License details saved." });
+      setDriverPhotoFile(null);
+      setDriverPhotoPreview(updated.photo_url);
+      setProfileMsg({ tone: "success", text: "Profile saved." });
     } catch (err) {
       setProfileMsg({
         tone: "error",
@@ -136,8 +150,43 @@ export default function OnboardingPage() {
 
       <Card>
         <form onSubmit={saveProfile} className="space-y-4">
-          <h3 className="font-semibold text-gray-900">License</h3>
+          <h3 className="font-semibold text-gray-900">Profile</h3>
           {profileMsg && <Alert tone={profileMsg.tone}>{profileMsg.text}</Alert>}
+
+          {/* Driver's personal profile photo */}
+          <div className="flex items-center gap-4">
+            {driverPhotoPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={driverPhotoPreview}
+                alt="Your profile"
+                className="h-20 w-20 rounded-full border border-gray-200 object-cover"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-gray-300 bg-gray-50 text-2xl text-gray-400">
+                👤
+              </div>
+            )}
+            <div className="flex-1">
+              <label
+                htmlFor="driver-photo"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Profile photo
+              </label>
+              <input
+                id="driver-photo"
+                type="file"
+                accept="image/*"
+                onChange={onDriverPhotoChange}
+                className="mt-1 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-emerald-700"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Passengers see this after you accept their ride.
+              </p>
+            </div>
+          </div>
+
           <Input
             label="Driver's license number"
             value={license}
@@ -150,7 +199,7 @@ export default function OnboardingPage() {
             required
           />
           <Button type="submit" fullWidth loading={profileBusy}>
-            Save license details
+            Save profile
           </Button>
         </form>
       </Card>

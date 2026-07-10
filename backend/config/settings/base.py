@@ -20,6 +20,12 @@ env = environ.Env(
     GEO_PROXIMITY=(str, "12.4954,9.2035"),  # lng,lat bias center (Yola, Adamawa)
     RIDE_SEARCH_TIMEOUT_MINUTES=(int, 10),
     PUBLIC_BASE_URL=(str, "http://127.0.0.1:8000"),
+    # Password-reset OTP delivery: "console" logs the code; "termii" sends SMS
+    OTP_PROVIDER=(str, "console"),
+    OTP_CODE_TTL_MINUTES=(int, 10),
+    TERMII_API_KEY=(str, ""),
+    TERMII_SENDER_ID=(str, "IJ Ride"),
+    TERMII_BASE_URL=(str, "https://api.ng.termii.com"),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -122,6 +128,13 @@ GEO_PROXIMITY = env("GEO_PROXIMITY")
 
 # A SEARCHING ride nobody accepts within this window becomes EXPIRED
 RIDE_SEARCH_TIMEOUT_MINUTES = env("RIDE_SEARCH_TIMEOUT_MINUTES")
+
+# Password-reset OTP delivery
+OTP_PROVIDER = env("OTP_PROVIDER")
+OTP_CODE_TTL_MINUTES = env("OTP_CODE_TTL_MINUTES")
+TERMII_API_KEY = env("TERMII_API_KEY")
+TERMII_SENDER_ID = env("TERMII_SENDER_ID")
+TERMII_BASE_URL = env("TERMII_BASE_URL")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

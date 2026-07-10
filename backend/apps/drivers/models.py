@@ -33,6 +33,8 @@ class DriverProfile(models.Model):
         db_index=True,
     )
     license_number = models.CharField(max_length=64, blank=True, default="")
+    # Driver's personal profile photo — distinct from their Vehicle.photo.
+    photo = models.ImageField(upload_to="drivers/", null=True, blank=True)
     approval_status = models.CharField(
         max_length=16,
         choices=DriverApprovalStatus.choices,

@@ -117,6 +117,34 @@ class RegisterDriverSerializer(BaseRegisterSerializer):
         return services.register_driver(**validated_data)
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):
+    phone = serializers.CharField(max_length=32)
+
+    def validate_phone(self, value):
+        # Normalize so "0803…" and "+234…" resolve to the same account. Never
+        # reveal whether the phone exists — that check lives in the service.
+        try:
+            return normalize_phone(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0])
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    phone = serializers.CharField(max_length=32)
+    code = serializers.CharField(max_length=12)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_phone(self, value):
+        try:
+            return normalize_phone(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0])
+
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+
 class PhoneTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Accepts local ('0803...') or international phone formats and adds the
     user payload to the login response."""

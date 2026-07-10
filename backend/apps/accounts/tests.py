@@ -1,4 +1,7 @@
+from unittest import mock
+
 from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -6,9 +9,11 @@ from rest_framework.test import APITestCase
 from apps.drivers.models import DriverApprovalStatus
 from apps.payments.constants import PaymentMethod
 
-from .models import User, UserRole
+from . import otp as otp_lib
+from .models import PhoneOTP, User, UserRole
 
 PASSWORD = "str0ng-Pass-2026"
+NEW_PASSWORD = "Fresh-Pass-9821"
 
 
 class RegistrationTests(APITestCase):
@@ -142,3 +147,101 @@ class MeEndpointTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["phone"], "+2348031110006")
         self.assertEqual(resp.data["role"], UserRole.PASSENGER)
+
+
+@override_settings(OTP_PROVIDER="console")
+class PasswordResetTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            "+2348031110030", PASSWORD, role=UserRole.PASSENGER, first_name="Sadiq"
+        )
+
+    def request_reset(self, phone):
+        return self.client.post(
+            reverse("accounts:password-reset-request"), {"phone": phone}
+        )
+
+    def confirm_reset(self, phone, code, new_password=NEW_PASSWORD):
+        return self.client.post(
+            reverse("accounts:password-reset-confirm"),
+            {"phone": phone, "code": code, "new_password": new_password},
+        )
+
+    def _capture_code(self, mock_send):
+        # send_code(phone, code) — grab the plaintext code the service issued
+        self.assertTrue(mock_send.called, "no OTP was sent")
+        return mock_send.call_args.args[1]
+
+    def test_full_reset_flow_with_local_phone_format(self):
+        with mock.patch("apps.accounts.services.otp_lib.send_code") as m:
+            resp = self.request_reset("0803 111 0030")  # local format
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        code = self._capture_code(m)
+
+        resp = self.confirm_reset("+2348031110030", code)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+
+        # Old password no longer works; the new one does
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.check_password(PASSWORD))
+        self.assertTrue(self.user.check_password(NEW_PASSWORD))
+        # The code is single-use
+        self.assertTrue(PhoneOTP.objects.get(phone="+2348031110030").consumed)
+
+    def test_request_for_unknown_phone_is_generic_and_sends_nothing(self):
+        with mock.patch("apps.accounts.services.otp_lib.send_code") as m:
+            resp = self.request_reset("+2348030000000")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("If an account exists", resp.data["detail"])
+        self.assertFalse(m.called)  # no code issued for a non-existent account
+        self.assertFalse(PhoneOTP.objects.exists())
+
+    def test_wrong_code_rejected_then_locks_after_max_attempts(self):
+        with mock.patch("apps.accounts.services.otp_lib.send_code") as m:
+            self.request_reset("+2348031110030")
+        real_code = self._capture_code(m)
+        wrong = "000000" if real_code != "000000" else "111111"
+
+        for _ in range(otp_lib.MAX_ATTEMPTS):
+            resp = self.confirm_reset("+2348031110030", wrong)
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Even the correct code now fails — the OTP is locked
+        resp = self.confirm_reset("+2348031110030", real_code)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Too many attempts", str(resp.data))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(PASSWORD))  # unchanged
+
+    def test_expired_code_rejected(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        with mock.patch("apps.accounts.services.otp_lib.send_code") as m:
+            self.request_reset("+2348031110030")
+        code = self._capture_code(m)
+        PhoneOTP.objects.filter(phone="+2348031110030").update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+        resp = self.confirm_reset("+2348031110030", code)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("expired", str(resp.data))
+
+    def test_resend_cooldown_reuses_no_new_code(self):
+        with mock.patch("apps.accounts.services.otp_lib.send_code") as m:
+            self.request_reset("+2348031110030")
+            self.request_reset("+2348031110030")  # immediate second request
+        # Only the first request issued a code (cooldown blocks the second)
+        self.assertEqual(m.call_count, 1)
+        self.assertEqual(
+            PhoneOTP.objects.filter(phone="+2348031110030", consumed=False).count(), 1
+        )
+
+    def test_confirm_rejects_weak_password(self):
+        with mock.patch("apps.accounts.services.otp_lib.send_code") as m:
+            self.request_reset("+2348031110030")
+        code = self._capture_code(m)
+        resp = self.confirm_reset("+2348031110030", code, new_password="12345678")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("new_password", resp.data)

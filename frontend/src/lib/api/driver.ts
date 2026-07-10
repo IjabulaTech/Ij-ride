@@ -11,8 +11,22 @@ export function getProfile(): Promise<DriverProfile> {
   return api<DriverProfile>("/drivers/me/profile/");
 }
 
-export function updateProfile(data: { license_number: string }): Promise<DriverProfile> {
-  return api<DriverProfile>("/drivers/me/profile/", { method: "PUT", body: data });
+export function updateProfile(data: {
+  license_number: string;
+  /** Optional personal profile photo; omit to keep the existing one. */
+  photo?: File | null;
+}): Promise<DriverProfile> {
+  if (data.photo) {
+    // Multipart when a new photo is attached
+    const form = new FormData();
+    form.append("license_number", data.license_number);
+    form.append("photo", data.photo);
+    return api<DriverProfile>("/drivers/me/profile/", { method: "PUT", body: form });
+  }
+  return api<DriverProfile>("/drivers/me/profile/", {
+    method: "PUT",
+    body: { license_number: data.license_number },
+  });
 }
 
 /** The driver's active vehicle, or null (404 before one is registered). */

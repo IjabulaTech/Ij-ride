@@ -2,6 +2,15 @@
 import { VEHICLE_CATEGORY_ICONS, VEHICLE_CATEGORY_LABELS } from "@/lib/format";
 import type { RideUser, Vehicle } from "@/types/api";
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "🚗";
+  return parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+}
+
 export function DriverCard({ driver, vehicle }: { driver: RideUser; vehicle: Vehicle | null }) {
   const name = [driver.first_name, driver.last_name].filter(Boolean).join(" ") || "Your driver";
   const categoryIcon = vehicle ? VEHICLE_CATEGORY_ICONS[vehicle.category] : "🚗";
@@ -9,24 +18,38 @@ export function DriverCard({ driver, vehicle }: { driver: RideUser; vehicle: Veh
 
   return (
     <div className="space-y-3 rounded-lg bg-gray-50 p-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-semibold text-gray-900">{name}</p>
-          {vehicle && (
-            <>
-              <p className="text-sm text-gray-600">
-                <span aria-hidden>{categoryIcon}</span> {categoryLabel} · {vehicle.color}{" "}
-                {vehicle.make} {vehicle.model}
-              </p>
-              <p className="text-sm font-mono font-semibold text-gray-800">
-                {vehicle.plate_number}
-              </p>
-            </>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {/* Driver profile photo, with initials fallback */}
+          {driver.photo_url ? (
+            <img
+              src={driver.photo_url}
+              alt={name}
+              className="h-12 w-12 shrink-0 rounded-full border border-gray-200 object-cover"
+            />
+          ) : (
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700">
+              {initials(name)}
+            </div>
           )}
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-gray-900">{name}</p>
+            {vehicle && (
+              <>
+                <p className="truncate text-sm text-gray-600">
+                  <span aria-hidden>{categoryIcon}</span> {categoryLabel} · {vehicle.color}{" "}
+                  {vehicle.make} {vehicle.model}
+                </p>
+                <p className="text-sm font-mono font-semibold text-gray-800">
+                  {vehicle.plate_number}
+                </p>
+              </>
+            )}
+          </div>
         </div>
         <a
           href={`tel:${driver.phone}`}
-          className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+          className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
         >
           Call
         </a>

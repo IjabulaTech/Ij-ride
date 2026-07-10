@@ -84,8 +84,22 @@ export default function AdminDriverDetailPage() {
       </Link>
 
       <Card className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">{name}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {driver.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={driver.photo_url}
+                alt={name}
+                className="h-12 w-12 shrink-0 rounded-full border border-gray-200 object-cover"
+              />
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg text-gray-400">
+                👤
+              </div>
+            )}
+            <h2 className="truncate text-lg font-bold text-gray-900">{name}</h2>
+          </div>
           <Badge tone={approvalStatusTone(driver.approval_status)}>{driver.approval_status}</Badge>
         </div>
         <div className="grid grid-cols-2 gap-3">

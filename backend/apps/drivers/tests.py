@@ -82,6 +82,51 @@ class OnboardingTests(DriverOnboardingTestCase):
         resp = self.client.get(reverse("drivers:my-profile"))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_driver_uploads_profile_photo(self):
+        self.login(self.driver)
+        photo = SimpleUploadedFile("me.png", TINY_PNG, content_type="image/png")
+        resp = self.client.put(
+            reverse("drivers:my-profile"),
+            {"license_number": "LAG-2026-900", "photo": photo},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertIsNotNone(resp.data["photo_url"])
+        self.assertIn("/media/drivers/", resp.data["photo_url"])
+        self.assertTrue(resp.data["photo_url"].startswith("http"))
+
+        # GET returns the stored photo_url
+        resp = self.client.get(reverse("drivers:my-profile"))
+        self.assertIsNotNone(resp.data["photo_url"])
+
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_photo_upload_does_not_reset_approval(self):
+        """Uploading a photo (license unchanged) must NOT re-trigger review."""
+        self.approve()  # driver is now APPROVED
+        self.login(self.driver)
+        current_license = self.driver.driver_profile.license_number
+        photo = SimpleUploadedFile("me.png", TINY_PNG, content_type="image/png")
+        resp = self.client.put(
+            reverse("drivers:my-profile"),
+            {"license_number": current_license, "photo": photo},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(resp.data["approval_status"], DriverApprovalStatus.APPROVED)
+
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_driver_photo_type_rejected(self):
+        self.login(self.driver)
+        gif = SimpleUploadedFile("me.gif", TINY_GIF, content_type="image/gif")
+        resp = self.client.put(
+            reverse("drivers:my-profile"),
+            {"license_number": "LAG-2026-901", "photo": gif},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("photo", resp.data)
+
     def test_vehicle_get_before_creation_is_404(self):
         self.login(self.driver)
         resp = self.client.get(reverse("drivers:my-vehicle"))

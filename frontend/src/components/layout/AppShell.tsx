@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { SoundToggle } from "@/components/layout/SoundToggle";
 import { Button } from "@/components/ui/Button";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -38,12 +39,14 @@ export function AppShell({
             <span className="text-lg font-bold text-gray-900">IJ Ride</span>
             <span className="text-sm text-gray-500">{title}</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {user && (
               <span className="hidden text-sm text-gray-600 sm:inline">
                 {user.first_name || user.phone}
               </span>
             )}
+            {/* Ride sound control — passengers & drivers get audible alerts */}
+            {(user?.role === "PASSENGER" || user?.role === "DRIVER") && <SoundToggle />}
             <Button variant="ghost" onClick={handleLogout}>
               Log out
             </Button>

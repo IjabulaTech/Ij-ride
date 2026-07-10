@@ -18,6 +18,7 @@ import { ApiError } from "@/lib/api/client";
 import { activeRide, cancelRide, getRide } from "@/lib/api/rides";
 import { formatDateTime, formatNaira } from "@/lib/format";
 import { useRideSocket } from "@/lib/hooks/useRideSocket";
+import { useRideStageSounds } from "@/lib/hooks/useRideStageSounds";
 import type { Ride, RideStatus } from "@/types/api";
 
 const TERMINAL: RideStatus[] = ["COMPLETED", "CANCELLED", "EXPIRED"];
@@ -51,6 +52,10 @@ export default function ActiveRidePage() {
       cancelled = true;
     };
   }, [router]);
+
+  // Beep on meaningful stage transitions (accepted / arrived / started /
+  // completed / payment confirmed) — deduped, so re-fetches don't replay.
+  useRideStageSounds(ride, "passenger");
 
   // Live updates over WebSocket.
   useRideSocket((message) => {

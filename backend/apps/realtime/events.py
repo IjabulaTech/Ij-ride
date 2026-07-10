@@ -39,7 +39,9 @@ def _send_ride_event(ride_id: int, event_type: str) -> None:
         return
 
     try:
-        ride = Ride.objects.select_related("passenger", "driver", "vehicle", "payment").get(
+        ride = Ride.objects.select_related(
+            "passenger", "driver", "driver__driver_profile", "vehicle", "payment"
+        ).get(
             pk=ride_id
         )
     except Ride.DoesNotExist:

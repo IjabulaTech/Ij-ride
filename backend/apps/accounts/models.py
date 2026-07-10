@@ -83,3 +83,29 @@ class PassengerProfile(models.Model):
 
     def __str__(self):
         return f"Passenger {self.user.phone}"
+
+
+class PhoneOTP(models.Model):
+    """One-time code for phone-based flows (V1: password reset). The code is
+    stored hashed, is single-use, expires, and locks after too many wrong
+    guesses. A new request for the same phone/purpose supersedes older ones."""
+
+    class Purpose(models.TextChoices):
+        PASSWORD_RESET = "PASSWORD_RESET", "Password reset"
+
+    phone = models.CharField(max_length=16, db_index=True)
+    purpose = models.CharField(
+        max_length=32, choices=Purpose.choices, default=Purpose.PASSWORD_RESET
+    )
+    code_hash = models.CharField(max_length=64)  # sha256 hex
+    attempts = models.PositiveSmallIntegerField(default=0)
+    consumed = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["phone", "purpose", "consumed"])]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"OTP {self.purpose} for {self.phone} ({'used' if self.consumed else 'active'})"

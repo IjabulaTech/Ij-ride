@@ -19,6 +19,7 @@ import {
   formatNaira,
   PAYMENT_METHOD_LABELS,
   VEHICLE_CATEGORY_ICONS,
+  VEHICLE_CATEGORY_IMAGES,
   VEHICLE_CATEGORY_LABELS,
 } from "@/lib/format";
 import {
@@ -219,21 +220,25 @@ export function BookRideForm({ defaultPaymentMethod }: { defaultPaymentMethod: P
         )}
         <div>
           <p className="mb-2 text-sm font-medium text-gray-700">Ride type</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {CATEGORIES.map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setCategory(c)}
-                className={`rounded-lg border px-3 py-3 text-sm font-semibold ${
+                aria-pressed={category === c}
+                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-sm font-semibold transition-colors ${
                   category === c
                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                    : "border-gray-300 bg-white text-gray-700"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
-                <span className="mr-1 text-lg" aria-hidden>
-                  {VEHICLE_CATEGORY_ICONS[c]}
-                </span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={VEHICLE_CATEGORY_IMAGES[c]}
+                  alt={`${VEHICLE_CATEGORY_LABELS[c]} ride`}
+                  className="h-20 w-full rounded-lg object-contain"
+                />
                 {VEHICLE_CATEGORY_LABELS[c]}
               </button>
             ))}

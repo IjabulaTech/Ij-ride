@@ -9,7 +9,9 @@ from .serializers import RideDetailSerializer
 
 
 def _ride_queryset():
-    return Ride.objects.select_related("passenger", "driver", "vehicle", "payment").order_by(
+    return Ride.objects.select_related(
+        "passenger", "driver", "driver__driver_profile", "vehicle", "payment"
+    ).order_by(
         "-created_at"
     )
 

@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm
-from .models import PassengerProfile, User
+from .models import PassengerProfile, PhoneOTP, User
 
 
 @admin.register(User)
@@ -36,3 +36,15 @@ class PassengerProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "default_payment_method", "created_at")
     search_fields = ("user__phone", "user__first_name", "user__last_name")
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(PhoneOTP)
+class PhoneOTPAdmin(admin.ModelAdmin):
+    # Read-only audit view — codes are stored hashed and never shown.
+    list_display = ("phone", "purpose", "consumed", "attempts", "expires_at", "created_at")
+    list_filter = ("purpose", "consumed")
+    search_fields = ("phone",)
+    readonly_fields = ("phone", "purpose", "code_hash", "attempts", "consumed", "expires_at", "created_at")
+
+    def has_add_permission(self, request):
+        return False

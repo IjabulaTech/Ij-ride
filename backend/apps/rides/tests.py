@@ -1,7 +1,9 @@
+import tempfile
 from datetime import timedelta
 from decimal import Decimal
 
 from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -231,6 +233,28 @@ class AcceptRideTests(RideTestCase):
         self.assertEqual(resp.data["driver"]["id"], self.driver.pk)
         self.assertEqual(resp.data["vehicle"]["plate_number"], "AAA111AA")
         self.assertIsNotNone(resp.data["accepted_at"])
+        # No photo uploaded -> passenger sees null, frontend shows a fallback
+        self.assertIsNone(resp.data["driver"]["photo_url"])
+
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_passenger_sees_driver_photo_after_acceptance(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.drivers.tests import TINY_PNG
+
+        profile = self.driver.driver_profile
+        profile.photo = SimpleUploadedFile("d.png", TINY_PNG, content_type="image/png")
+        profile.save(update_fields=["photo"])
+
+        ride = self.request_ride()
+        self.act(self.driver, ride["id"], "accept")
+
+        # Passenger pulls their active ride and sees the driver's photo
+        self.login(self.passenger)
+        resp = self.client.get(reverse("rides:active"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertIsNotNone(resp.data["driver"]["photo_url"])
+        self.assertIn("/media/drivers/", resp.data["driver"]["photo_url"])
 
     def test_offline_driver_cannot_accept(self):
         ride = self.request_ride()

@@ -19,6 +19,28 @@ export function login(phone: string, password: string): Promise<AuthResponse> {
   });
 }
 
+/** Request a password-reset code by phone. Always resolves (the API responds
+ * the same whether or not the account exists). */
+export function requestPasswordReset(phone: string): Promise<{ detail: string }> {
+  return api<{ detail: string }>("/auth/password/reset/request/", {
+    method: "POST",
+    body: { phone },
+    auth: false,
+  });
+}
+
+export function confirmPasswordReset(
+  phone: string,
+  code: string,
+  new_password: string
+): Promise<{ detail: string }> {
+  return api<{ detail: string }>("/auth/password/reset/confirm/", {
+    method: "POST",
+    body: { phone, code, new_password },
+    auth: false,
+  });
+}
+
 export function registerPassenger(data: RegisterData): Promise<AuthResponse> {
   return api<AuthResponse>("/auth/register/passenger/", {
     method: "POST",

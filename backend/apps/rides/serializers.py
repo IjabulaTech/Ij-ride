@@ -65,12 +65,23 @@ def serialize_estimate(estimate: RideEstimate) -> dict:
 
 
 class RideUserSerializer(serializers.Serializer):
-    """Counterparty contact card — enough to identify and call each other."""
+    """Counterparty contact card — enough to identify and call each other.
+    `photo_url` is the driver's personal profile photo (null for passengers,
+    who have no driver profile in V1)."""
 
     id = serializers.IntegerField(read_only=True)
     phone = serializers.CharField(read_only=True)
     first_name = serializers.CharField(read_only=True)
     last_name = serializers.CharField(read_only=True)
+    photo_url = serializers.SerializerMethodField()
+
+    def get_photo_url(self, user) -> str | None:
+        from apps.drivers.serializers import build_media_url
+
+        profile = getattr(user, "driver_profile", None)
+        if profile is None or not profile.photo:
+            return None
+        return build_media_url(profile.photo, self.context.get("request"))
 
 
 class RidePaymentSerializer(serializers.ModelSerializer):

@@ -64,6 +64,14 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
+        <div className="text-right">
+          <Link
+            href="/forgot-password"
+            className="text-sm font-semibold text-emerald-600 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <Button type="submit" fullWidth loading={submitting}>
           Log in
         </Button>

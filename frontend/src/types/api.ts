@@ -74,6 +74,7 @@ export interface DriverAvailability {
 export interface DriverProfile {
   driver_category: VehicleCategory;
   license_number: string;
+  photo_url: string | null;
   approval_status: ApprovalStatus;
   approval_note: string;
   approved_at: string | null;
@@ -85,6 +86,8 @@ export interface RideUser {
   phone: string;
   first_name: string;
   last_name: string;
+  /** Driver's personal profile photo; null for passengers or when unset. */
+  photo_url: string | null;
 }
 
 export interface RidePayment {
@@ -216,6 +219,7 @@ export interface AdminDriver {
   id: number;
   user: User;
   license_number: string;
+  photo_url: string | null;
   approval_status: ApprovalStatus;
   approval_note: string;
   approved_at: string | null;

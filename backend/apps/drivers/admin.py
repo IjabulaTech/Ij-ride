@@ -20,6 +20,7 @@ class DriverProfileAdmin(admin.ModelAdmin):
         "user",
         "driver_category",
         "license_number",
+        "has_photo",
         "approval_status",
         "approved_at",
         "created_at",
@@ -28,6 +29,10 @@ class DriverProfileAdmin(admin.ModelAdmin):
     search_fields = ("user__phone", "user__first_name", "user__last_name", "license_number")
     readonly_fields = ("created_at", "updated_at")
     inlines = [DriverAvailabilityInline, VehicleInline]
+
+    @admin.display(boolean=True, description="Photo")
+    def has_photo(self, profile):
+        return bool(profile.photo)
 
 
 @admin.register(DriverAvailability)

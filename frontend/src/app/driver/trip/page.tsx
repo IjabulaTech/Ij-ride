@@ -23,6 +23,7 @@ import {
 } from "@/lib/api/rides";
 import { formatNaira, PAYMENT_METHOD_LABELS } from "@/lib/format";
 import { useRideSocket } from "@/lib/hooks/useRideSocket";
+import { useRideStageSounds } from "@/lib/hooks/useRideStageSounds";
 import type { Ride, RideStatus } from "@/types/api";
 
 const TERMINAL: RideStatus[] = ["COMPLETED", "CANCELLED", "EXPIRED"];
@@ -61,6 +62,10 @@ export default function DriverTripPage() {
       cancelled = true;
     };
   }, [router]);
+
+  // Beep when the passenger claims a transfer (driver must confirm) or the
+  // active ride is cancelled. Deduped against re-fetches / reconnects.
+  useRideStageSounds(ride, "driver");
 
   useRideSocket((message) => {
     if (message.type === "ride.event" && message.ride.id === rideIdRef.current) {
