@@ -36,3 +36,14 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
+
+# Persistent media: when CLOUDINARY_URL is present, driver/vehicle photos are
+# stored on Cloudinary's CDN instead of Render's ephemeral disk (which wipes
+# uploads on every deploy). Without it, we fall back to local disk served by
+# config/urls.py. Get a free CLOUDINARY_URL at cloudinary.com and set it in the
+# Render environment — no code change needed.
+_CLOUDINARY_URL = env("CLOUDINARY_URL", default="")
+USE_CLOUDINARY = bool(_CLOUDINARY_URL)
+if USE_CLOUDINARY:
+    INSTALLED_APPS += ["cloudinary_storage", "cloudinary"]  # noqa: F405
+    STORAGES["default"] = {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"}

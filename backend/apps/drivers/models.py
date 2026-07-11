@@ -107,10 +107,15 @@ class Vehicle(models.Model):
         default=VehicleCategory.CAR,  # pre-category vehicles were all cars
         db_index=True,
     )
-    make = models.CharField(max_length=64)
-    model = models.CharField(max_length=64)
-    year = models.PositiveSmallIntegerField(validators=[MinValueValidator(1980)])
-    color = models.CharField(max_length=32)
+    # make/model/year/color describe a CAR. KEKE (tricycle) listings only need a
+    # plate + photo, so these are optional and blank for keke — required for CAR
+    # is enforced in VehicleSerializer.validate().
+    make = models.CharField(max_length=64, blank=True, default="")
+    model = models.CharField(max_length=64, blank=True, default="")
+    year = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1980)]
+    )
+    color = models.CharField(max_length=32, blank=True, default="")
     plate_number = models.CharField(max_length=20, unique=True)
     photo = models.ImageField(upload_to="vehicles/", null=True, blank=True)
     is_active = models.BooleanField(default=True)

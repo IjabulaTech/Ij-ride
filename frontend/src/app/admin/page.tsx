@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Card } from "@/components/ui/Card";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import * as adminApi from "@/lib/api/admin";
 import { formatNaira, VEHICLE_CATEGORY_LABELS } from "@/lib/format";
+import { playBeep } from "@/lib/sound";
 import type { FareSetting } from "@/types/api";
+
+// How often the admin dashboard re-fetches its counts.
+const ADMIN_POLL_MS = 15_000;
 
 interface Stats {
   users: number;
@@ -32,10 +36,12 @@ function StatCard({ label, value, href }: { label: string; value: number; href: 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
+  // Remember the last pending-driver count so we can beep only when it grows
+  // (a NEW driver has registered and is waiting for approval).
+  const prevPendingRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const load = useCallback(async () => {
+    try {
       const [users, pending, rides, payments, fares] = await Promise.all([
         adminApi.listUsers({}),
         adminApi.listDrivers({ approval_status: "PENDING" }),
@@ -43,7 +49,11 @@ export default function AdminDashboard() {
         adminApi.listPayments({ status: "PENDING" }),
         adminApi.listFareSettings(),
       ]);
-      if (cancelled) return;
+      // Alert on a newly-registered driver awaiting approval.
+      if (prevPendingRef.current !== null && pending.count > prevPendingRef.current) {
+        playBeep("alert");
+      }
+      prevPendingRef.current = pending.count;
       setStats({
         users: users.count,
         pendingDrivers: pending.count,
@@ -51,11 +61,17 @@ export default function AdminDashboard() {
         pendingPayments: payments.count,
         activeFares: fares.results.filter((f) => f.is_active),
       });
-    })().catch(() => !cancelled && setError("Could not load dashboard data."));
-    return () => {
-      cancelled = true;
-    };
+      setError("");
+    } catch {
+      setError("Could not load dashboard data.");
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, ADMIN_POLL_MS);
+    return () => clearInterval(timer);
+  }, [load]);
 
   if (error) return <Alert tone="error">{error}</Alert>;
   if (!stats) return <FullPageSpinner />;

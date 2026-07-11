@@ -18,8 +18,16 @@ from django.core.management.base import BaseCommand
 
 from apps.accounts.models import User
 from apps.accounts.utils import normalize_phone
+from apps.commissions.models import CommissionType, PlatformCommissionSetting
 from apps.drivers.models import VehicleCategory
 from apps.pricing.models import FareSetting
+
+# Default platform commission: 15% of every completed fare. Change anytime in
+# Django admin (Commissions) — this only seeds when NO active setting exists.
+DEFAULT_COMMISSION = {
+    "commission_type": CommissionType.PERCENTAGE,
+    "commission_value": Decimal("15"),
+}
 
 DEFAULT_FARES = {
     VehicleCategory.KEKE: {
@@ -45,6 +53,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self._bootstrap_superuser()
         self._seed_fares()
+        self._seed_commission()
 
     def _bootstrap_superuser(self):
         phone = os.environ.get("DJANGO_SUPERUSER_PHONE")
@@ -70,3 +79,10 @@ class Command(BaseCommand):
                 **{k: Decimal(v) for k, v in cfg.items()},
             )
             self.stdout.write(self.style.SUCCESS(f"Seeded default {category} fare."))
+
+    def _seed_commission(self):
+        if PlatformCommissionSetting.get_active() is not None:
+            self.stdout.write("An active commission setting already exists — leaving it.")
+            return
+        PlatformCommissionSetting.objects.create(is_active=True, **DEFAULT_COMMISSION)
+        self.stdout.write(self.style.SUCCESS("Seeded default 15% platform commission."))

@@ -54,11 +54,13 @@ export function saveVehicle(data: VehicleData): Promise<Vehicle> {
   // Multipart so the photo can ride along; works fine without a photo too.
   const form = new FormData();
   form.append("category", data.category);
-  form.append("make", data.make);
-  form.append("model", data.model);
-  form.append("year", String(data.year));
-  form.append("color", data.color);
   form.append("plate_number", data.plate_number);
+  // Car-only fields — a KEKE leaves these blank, so only send what's filled
+  // (an empty "year" would fail integer validation server-side).
+  if (data.make) form.append("make", data.make);
+  if (data.model) form.append("model", data.model);
+  if (String(data.year)) form.append("year", String(data.year));
+  if (data.color) form.append("color", data.color);
   if (data.photo) form.append("photo", data.photo);
   return api<Vehicle>("/drivers/me/vehicle/", { method: "PUT", body: form });
 }

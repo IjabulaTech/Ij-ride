@@ -15,6 +15,13 @@ export function DriverCard({ driver, vehicle }: { driver: RideUser; vehicle: Veh
   const name = [driver.first_name, driver.last_name].filter(Boolean).join(" ") || "Your driver";
   const categoryIcon = vehicle ? VEHICLE_CATEGORY_ICONS[vehicle.category] : "🚗";
   const categoryLabel = vehicle ? VEHICLE_CATEGORY_LABELS[vehicle.category] : "Vehicle";
+  // KEKE listings have no make/model/colour — show only what's set.
+  const vehicleDescription = vehicle
+    ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(" ")
+    : "";
+  const vehiclePhotoAlt = [categoryLabel, vehicleDescription, vehicle?.plate_number]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="space-y-3 rounded-lg bg-gray-50 p-3">
@@ -37,8 +44,8 @@ export function DriverCard({ driver, vehicle }: { driver: RideUser; vehicle: Veh
             {vehicle && (
               <>
                 <p className="truncate text-sm text-gray-600">
-                  <span aria-hidden>{categoryIcon}</span> {categoryLabel} · {vehicle.color}{" "}
-                  {vehicle.make} {vehicle.model}
+                  <span aria-hidden>{categoryIcon}</span> {categoryLabel}
+                  {vehicleDescription && ` · ${vehicleDescription}`}
                 </p>
                 <p className="text-sm font-mono font-semibold text-gray-800">
                   {vehicle.plate_number}
@@ -57,7 +64,7 @@ export function DriverCard({ driver, vehicle }: { driver: RideUser; vehicle: Veh
       {vehicle?.photo_url ? (
         <img
           src={vehicle.photo_url}
-          alt={`${vehicle.color} ${vehicle.make} ${vehicle.model} (${vehicle.plate_number})`}
+          alt={vehiclePhotoAlt}
           className="h-36 w-full rounded-lg border border-gray-200 object-cover"
         />
       ) : (

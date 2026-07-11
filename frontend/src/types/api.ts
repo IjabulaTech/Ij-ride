@@ -52,9 +52,10 @@ export interface AuthResponse extends AuthTokens {
 export interface Vehicle {
   id: number;
   category: VehicleCategory;
+  // make/model/color are "" and year is null for KEKE (tricycle) listings
   make: string;
   model: string;
-  year: number;
+  year: number | null;
   color: string;
   plate_number: string;
   photo_url: string | null;

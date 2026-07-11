@@ -214,15 +214,21 @@ class OnboardingTests(DriverOnboardingTestCase):
         self.assertIsNotNone(resp.data["photo_url"])
         self.assertIn("/media/vehicles/", resp.data["photo_url"])
         self.assertTrue(resp.data["photo_url"].startswith("http"))
+        # KEKE listings carry only a plate + photo — car-only fields are dropped
+        self.assertEqual(resp.data["make"], "")
+        self.assertEqual(resp.data["model"], "")
+        self.assertEqual(resp.data["color"], "")
+        self.assertIsNone(resp.data["year"])
 
-        # update WITHOUT a new photo keeps the existing one
+        # update WITHOUT a new photo keeps the existing one; car-only fields
+        # sent for a KEKE are still ignored.
         resp = self.client.put(
             reverse("drivers:my-vehicle"),
             {**VEHICLE, "category": "KEKE", "plate_number": "KEK987AB", "color": "Yellow"},
             format="multipart",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
-        self.assertEqual(resp.data["color"], "Yellow")
+        self.assertEqual(resp.data["color"], "")
         self.assertIsNotNone(resp.data["photo_url"])
 
     def test_car_driver_cannot_register_keke_vehicle(self):

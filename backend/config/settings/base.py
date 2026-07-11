@@ -107,9 +107,12 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Vehicle photos and other uploads (V1: local disk; swap to S3/Cloudinary later)
+# Vehicle photos and other uploads. Local disk by default; when CLOUDINARY_URL
+# is configured (prod), uploads go to Cloudinary's CDN and persist across
+# deploys (Render's own disk is ephemeral). prod.py flips USE_CLOUDINARY on.
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+USE_CLOUDINARY = False
 
 # Absolute base used to build media URLs in payloads that have no request
 # context (WebSocket broadcasts) — the frontend runs on a different origin.

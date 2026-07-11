@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 
+import { IosInstallPrompt } from "@/components/pwa/IosInstallPrompt";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
 import { AuthProvider } from "@/lib/auth/AuthContext";
 
@@ -63,6 +64,7 @@ export default function RootLayout({
       <body className="min-h-full">
         <AuthProvider>{children}</AuthProvider>
         <PwaRegister />
+        <IosInstallPrompt />
       </body>
     </html>
   );

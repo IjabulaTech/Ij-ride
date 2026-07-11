@@ -7,6 +7,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AuthPageFrame } from "@/components/auth/AuthPageFrame";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { ImageMarquee } from "@/components/ui/ImageMarquee";
 import { Input } from "@/components/ui/Input";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -46,7 +47,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthPageFrame heading="Log in to continue">
+    <AuthPageFrame heading="Log in to continue" below={<ImageMarquee />}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <Alert tone="error">{error}</Alert>}
         <Input

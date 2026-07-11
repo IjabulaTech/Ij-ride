@@ -18,7 +18,8 @@ export default function AdminDriversPage() {
 
   const { data, page, setPage, loading, error } = usePaged(
     (p) => listDrivers({ page: p, approval_status: applied.status, search: applied.search }),
-    JSON.stringify(applied)
+    JSON.stringify(applied),
+    15_000 // live-refresh the driver queue every 15s
   );
 
   return (
@@ -69,7 +70,14 @@ export default function AdminDriversPage() {
                 <Td className="font-mono text-xs">{driver.license_number || "—"}</Td>
                 <Td className="text-xs">
                   {driver.active_vehicle
-                    ? `${driver.active_vehicle.make} ${driver.active_vehicle.model} · ${driver.active_vehicle.plate_number}`
+                    ? [
+                        [driver.active_vehicle.make, driver.active_vehicle.model]
+                          .filter(Boolean)
+                          .join(" "),
+                        driver.active_vehicle.plate_number,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
                     : "—"}
                 </Td>
                 <Td>

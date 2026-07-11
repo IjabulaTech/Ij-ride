@@ -1,24 +1,37 @@
 /**
- * Tiny notification-sound utility for IJ Ride.
+ * Notification-sound utility for IJ Ride.
  *
- * Uses the Web Audio API to synthesize short beeps — no audio files to load,
- * cache, or trip the PWA service worker / CSP. Two tones:
- *   - "alert"  : two bright beeps — driver's new ride request (attention-grabbing)
- *   - "normal" : one soft beep    — passenger/driver status & payment updates
+ * Primary sound is the uploaded MP3 at /sounds/notification.mp3 (one shared,
+ * preloaded <audio> element). If it can't play for any reason, we fall back to
+ * a synthesized Web Audio beep so a notification is never silently dropped.
+ *   - "alert"  : driver's new ride request (attention-grabbing)
+ *   - "normal" : passenger/driver status, payments, admin approvals
  *
  * BROWSER AUTOPLAY REALITY: browsers (esp. iOS Safari) block audio until the
- * user has interacted with the page. We create/resume the AudioContext on the
- * FIRST user gesture anywhere (a one-time pointer/key listener). Since drivers
- * tap "Go online" and passengers tap through booking before any beep is due,
- * audio is unlocked by the time an event fires. If a user somehow never
- * interacts, beeps are silently skipped (no errors) — that is the expected,
- * documented limitation.
+ * user has interacted with the page. We resume the AudioContext AND "prime"
+ * the <audio> element (a muted play/pause) on the FIRST user gesture anywhere.
+ * Since drivers tap "Go online" and passengers tap through booking before any
+ * beep is due, audio is unlocked by the time an event fires. If a user somehow
+ * never interacts, beeps are skipped silently (no errors).
  *
  * A mute preference is persisted in localStorage so users can silence alerts.
  */
 
 let ctx: AudioContext | null = null;
 const MUTE_KEY = "ijride.sound.muted";
+const SOUND_URL = "/sounds/notification.mp3";
+
+let audioEl: HTMLAudioElement | null = null;
+let audioPrimed = false;
+
+function getAudio(): HTMLAudioElement | null {
+  if (typeof window === "undefined") return null;
+  if (!audioEl) {
+    audioEl = new Audio(SOUND_URL);
+    audioEl.preload = "auto";
+  }
+  return audioEl;
+}
 
 function getCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -46,10 +59,28 @@ export function setSoundMuted(muted: boolean): void {
   if (!muted) unlockAudio(); // toggling on counts as a gesture — unlock now
 }
 
-/** Resume/create the audio context on a user gesture (autoplay policy). */
+/** Resume the audio context AND prime the <audio> element on a user gesture
+ * (autoplay policy). Priming = a muted play/pause, which iOS Safari requires
+ * before a later programmatic play() (e.g. on a WebSocket event) will work. */
 export function unlockAudio(): void {
   const c = getCtx();
   if (c && c.state === "suspended") c.resume().catch(() => undefined);
+
+  const a = getAudio();
+  if (a && !audioPrimed) {
+    audioPrimed = true;
+    a.muted = true;
+    a.play()
+      .then(() => {
+        a.pause();
+        a.currentTime = 0;
+        a.muted = false;
+      })
+      .catch(() => {
+        a.muted = false; // will retry priming on the next gesture
+        audioPrimed = false;
+      });
+  }
 }
 
 // Unlock on the very first interaction anywhere in the app.
@@ -81,8 +112,8 @@ function tone(c: AudioContext, freq: number, startOffset: number, duration: numb
 
 export type BeepKind = "normal" | "alert";
 
-export function playBeep(kind: BeepKind = "normal"): void {
-  if (isSoundMuted()) return;
+/** Synthesized fallback beep — used only if the MP3 can't play. */
+function playSynth(kind: BeepKind): void {
   const c = getCtx();
   if (!c) return;
   if (c.state === "suspended") c.resume().catch(() => undefined);
@@ -93,4 +124,32 @@ export function playBeep(kind: BeepKind = "normal"): void {
   } else {
     tone(c, 660, 0, 0.2);
   }
+}
+
+export function playBeep(kind: BeepKind = "normal"): void {
+  if (isSoundMuted()) return;
+  const a = getAudio();
+  if (a) {
+    try {
+      a.currentTime = 0;
+      const played = a.play();
+      // A new ride request is important — give it a second ring shortly after.
+      if (kind === "alert") {
+        window.setTimeout(() => {
+          const el = getAudio();
+          if (el && !isSoundMuted()) {
+            el.currentTime = 0;
+            el.play().catch(() => undefined);
+          }
+        }, 700);
+      }
+      if (played) {
+        played.catch(() => playSynth(kind)); // blocked/failed → synth fallback
+      }
+      return;
+    } catch {
+      /* fall through to synth */
+    }
+  }
+  playSynth(kind);
 }

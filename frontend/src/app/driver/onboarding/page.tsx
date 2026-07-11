@@ -136,6 +136,9 @@ export default function OnboardingPage() {
   if (loading || !profile) return <FullPageSpinner />;
 
   const fieldError = (key: string) => vehicleErrors[key]?.join(" ");
+  // KEKE (tricycle) drivers only provide a plate number + photos — no make,
+  // model, year, colour, or driver's licence.
+  const isKeke = category === "KEKE";
 
   return (
     <div className="space-y-4">
@@ -187,17 +190,19 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          <Input
-            label="Driver's license number"
-            value={license}
-            onChange={(e) => setLicense(e.target.value)}
-            hint={
-              profile.approval_status === "APPROVED"
-                ? "Changing your license number sends your account back for re-approval."
-                : undefined
-            }
-            required
-          />
+          {!isKeke && (
+            <Input
+              label="Driver's license number"
+              value={license}
+              onChange={(e) => setLicense(e.target.value)}
+              hint={
+                profile.approval_status === "APPROVED"
+                  ? "Changing your license number sends your account back for re-approval."
+                  : undefined
+              }
+              required
+            />
+          )}
           <Button type="submit" fullWidth loading={profileBusy}>
             Save profile
           </Button>
@@ -245,12 +250,14 @@ export default function OnboardingPage() {
               <p className="mt-1 text-xs text-red-600">{vehicleErrors.category.join(" ")}</p>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Make" placeholder="Toyota" value={vehicle.make} onChange={setV("make")} error={fieldError("make")} required />
-            <Input label="Model" placeholder="Corolla" value={vehicle.model} onChange={setV("model")} error={fieldError("model")} required />
-            <Input label="Year" type="number" placeholder="2016" value={vehicle.year} onChange={setV("year")} error={fieldError("year")} required />
-            <Input label="Color" placeholder="Black" value={vehicle.color} onChange={setV("color")} error={fieldError("color")} required />
-          </div>
+          {!isKeke && (
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Make" placeholder="Toyota" value={vehicle.make} onChange={setV("make")} error={fieldError("make")} required />
+              <Input label="Model" placeholder="Corolla" value={vehicle.model} onChange={setV("model")} error={fieldError("model")} required />
+              <Input label="Year" type="number" placeholder="2016" value={vehicle.year} onChange={setV("year")} error={fieldError("year")} required />
+              <Input label="Color" placeholder="Black" value={vehicle.color} onChange={setV("color")} error={fieldError("color")} required />
+            </div>
+          )}
           <Input
             label="Plate number"
             placeholder="ABC123XY"

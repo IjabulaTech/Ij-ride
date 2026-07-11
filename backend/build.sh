@@ -5,5 +5,5 @@ set -o errexit
 pip install -r requirements/prod.txt
 python manage.py collectstatic --noinput
 python manage.py migrate
-# Idempotent: creates the admin from env + seeds default fares if missing.
+# Idempotent: creates the admin from env + seeds default fares & 15% commission if missing.
 python manage.py bootstrap_launch

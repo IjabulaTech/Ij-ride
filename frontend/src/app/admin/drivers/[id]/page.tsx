@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api/client";
 import { approveDriver, getDriver, rejectDriver } from "@/lib/api/admin";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, VEHICLE_CATEGORY_LABELS } from "@/lib/format";
 import type { AdminDriver } from "@/types/api";
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -111,7 +111,18 @@ export default function AdminDriverDetailPage() {
             label="Vehicle"
             value={
               driver.active_vehicle
-                ? `${driver.active_vehicle.color} ${driver.active_vehicle.make} ${driver.active_vehicle.model} (${driver.active_vehicle.year})`
+                ? [
+                    [
+                      driver.active_vehicle.color,
+                      driver.active_vehicle.make,
+                      driver.active_vehicle.model,
+                    ]
+                      .filter(Boolean)
+                      .join(" "),
+                    driver.active_vehicle.year ? `(${driver.active_vehicle.year})` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || VEHICLE_CATEGORY_LABELS[driver.active_vehicle.category]
                 : ""
             }
           />
