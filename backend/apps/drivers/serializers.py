@@ -34,9 +34,14 @@ def build_media_url(file_field, request) -> str | None:
     else built from PUBLIC_BASE_URL (WebSocket / context-less payloads)."""
     if not file_field:
         return None
+    url = file_field.url
+    # Remote storages (Cloudinary/S3) already return an absolute URL — never
+    # prefix a host onto it (that would break WebSocket-broadcast payloads).
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
     if request is not None:
-        return request.build_absolute_uri(file_field.url)
-    return f"{settings.PUBLIC_BASE_URL.rstrip('/')}{file_field.url}"
+        return request.build_absolute_uri(url)
+    return f"{settings.PUBLIC_BASE_URL.rstrip('/')}{url}"
 
 
 class DriverProfileSerializer(serializers.ModelSerializer):
