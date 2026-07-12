@@ -116,12 +116,26 @@ class OnboardingTests(DriverOnboardingTestCase):
         self.assertEqual(resp.data["approval_status"], DriverApprovalStatus.APPROVED)
 
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
-    def test_driver_photo_type_rejected(self):
+    def test_driver_photo_any_format_accepted(self):
+        """Any decodable image (here a GIF) is accepted and stored as JPEG."""
         self.login(self.driver)
         gif = SimpleUploadedFile("me.gif", TINY_GIF, content_type="image/gif")
         resp = self.client.put(
             reverse("drivers:my-profile"),
             {"license_number": "LAG-2026-901", "photo": gif},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertTrue(resp.data["photo_url"].endswith(".jpg"), resp.data["photo_url"])
+
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_non_image_upload_rejected(self):
+        """A file that isn't a decodable image is still rejected."""
+        self.login(self.driver)
+        bogus = SimpleUploadedFile("notes.txt", b"not an image at all", content_type="text/plain")
+        resp = self.client.put(
+            reverse("drivers:my-profile"),
+            {"license_number": "LAG-2026-902", "photo": bogus},
             format="multipart",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -161,7 +175,8 @@ class OnboardingTests(DriverOnboardingTestCase):
         self.assertIn("category", resp.data)
 
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
-    def test_vehicle_photo_type_rejected(self):
+    def test_vehicle_photo_any_format_accepted(self):
+        """A GIF vehicle photo is accepted and normalized to JPEG."""
         self.login(self.driver)
         gif_upload = SimpleUploadedFile("keke.gif", TINY_GIF, content_type="image/gif")
         resp = self.client.put(
@@ -169,24 +184,23 @@ class OnboardingTests(DriverOnboardingTestCase):
             {**VEHICLE, "plate_number": "REJ001AA", "photo": gif_upload},
             format="multipart",
         )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("photo", resp.data)
-        self.assertIn("JPEG", str(resp.data["photo"]))
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertTrue(resp.data["photo_url"].endswith(".jpg"), resp.data["photo_url"])
 
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
     def test_vehicle_photo_size_rejected(self):
-        """Uploading > 5 MB is rejected before the file lands on disk."""
+        """Uploading > 15 MB is rejected before the file is decoded."""
         self.login(self.driver)
-        # Real 6 MB PNG (2000x2000 solid image compresses beyond the cap).
         from io import BytesIO
+
         from PIL import Image
 
         buf = BytesIO()
         Image.new("RGB", (2500, 2500), "red").save(buf, format="PNG")
         blob = buf.getvalue()
-        # Pad if Pillow's PNG was smaller than 5 MB (varies by version)
-        if len(blob) <= 5 * 1024 * 1024:
-            blob = blob + b"\x00" * (5 * 1024 * 1024 + 1024 - len(blob))
+        cap = 15 * 1024 * 1024
+        if len(blob) <= cap:  # pad past the cap (Pillow's PNG is small)
+            blob = blob + b"\x00" * (cap + 1024 - len(blob))
         big_upload = SimpleUploadedFile("big.png", blob, content_type="image/png")
         resp = self.client.put(
             reverse("drivers:my-vehicle"),

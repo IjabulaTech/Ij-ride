@@ -1,6 +1,9 @@
+import io
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.files.base import ContentFile
+from PIL import Image, ImageOps
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
@@ -9,24 +12,35 @@ from . import services
 from .models import DriverAvailability, DriverProfile, Vehicle, VehicleCategory
 
 
-MAX_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB
-ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_PHOTO_BYTES = 15 * 1024 * 1024  # 15 MB raw upload (re-compressed below)
+MAX_IMAGE_DIM = 1600  # cap the long edge — ample for profile/vehicle display
 
 
-def validate_image_upload(photo, *, label="Photo"):
-    """Shared size + MIME guard for user-uploaded images (vehicle + driver)."""
+def process_image_upload(photo, *, label="Photo"):
+    """Accept ANY picture the server can decode — JPEG, PNG, WebP, GIF, BMP,
+    TIFF, and iPhone HEIC/HEIF — and normalize it to a web-safe JPEG that every
+    browser renders. Also honours EXIF rotation (phone photos) and caps the
+    dimensions. Returns a Django file ready for an ImageField, or None.
+    """
     if photo is None:
         return photo
     size = getattr(photo, "size", 0)
     if size > MAX_PHOTO_BYTES:
         raise serializers.ValidationError(
-            f"{label} is too large ({size // 1024} KB). Maximum is "
+            f"{label} is too large ({size // (1024 * 1024)} MB). Maximum is "
             f"{MAX_PHOTO_BYTES // (1024 * 1024)} MB."
         )
-    content_type = getattr(photo, "content_type", "") or ""
-    if content_type and content_type not in ALLOWED_PHOTO_TYPES:
-        raise serializers.ValidationError(f"{label} must be a JPEG, PNG, or WebP image.")
-    return photo
+    try:
+        img = Image.open(photo)
+        img = ImageOps.exif_transpose(img)  # rotate to the orientation shot
+        img = img.convert("RGB")
+        img.thumbnail((MAX_IMAGE_DIM, MAX_IMAGE_DIM))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85, optimize=True)
+    except Exception:
+        raise serializers.ValidationError(f"{label} must be a valid image file.")
+    base = (getattr(photo, "name", "") or "photo").rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return ContentFile(buf.getvalue(), name=f"{base or 'photo'}.jpg")
 
 
 def build_media_url(file_field, request) -> str | None:
@@ -48,7 +62,9 @@ class DriverProfileSerializer(serializers.ModelSerializer):
     """Driver's own profile view. Only identity fields are writable —
     approval fields change exclusively through the management workflow."""
 
-    photo = serializers.ImageField(write_only=True, required=False, allow_null=True)
+    # FileField (not ImageField) so any format is accepted; process_image_upload
+    # validates it's a real image and converts it to a web-safe JPEG.
+    photo = serializers.FileField(write_only=True, required=False, allow_null=True)
     photo_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -77,7 +93,7 @@ class DriverProfileSerializer(serializers.ModelSerializer):
         return build_media_url(profile.photo, self.context.get("request"))
 
     def validate_photo(self, photo):
-        return validate_image_upload(photo, label="Profile photo")
+        return process_image_upload(photo, label="Profile photo")
 
     def update(self, instance, validated_data):
         # License changes may trigger re-approval; that logic stays in the
@@ -104,11 +120,13 @@ class VehicleSerializer(serializers.ModelSerializer):
     model = serializers.CharField(required=False, allow_blank=True, default="")
     year = serializers.IntegerField(required=False, allow_null=True, min_value=1980)
     color = serializers.CharField(required=False, allow_blank=True, default="")
-    photo = serializers.ImageField(write_only=True, required=False, allow_null=True)
+    # FileField (not ImageField) so any format is accepted; process_image_upload
+    # validates it's a real image and converts it to a web-safe JPEG.
+    photo = serializers.FileField(write_only=True, required=False, allow_null=True)
     photo_url = serializers.SerializerMethodField()
 
     def validate_photo(self, photo):
-        return validate_image_upload(photo, label="Vehicle photo")
+        return process_image_upload(photo, label="Vehicle photo")
 
     def validate(self, attrs):
         # A CAR needs full details; a KEKE only needs plate + photo. On update
