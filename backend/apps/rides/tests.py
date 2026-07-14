@@ -528,3 +528,21 @@ class ActiveAndHistoryTests(RideTestCase):
         self.login(self.passenger)
         resp = self.client.get(reverse("management:ride-list"))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_management_rides_list_with_date_filter(self):
+        today_ride = self.request_ride()
+        self.act(self.passenger, today_ride["id"], "cancel")  # free the passenger
+        old_ride = self.request_ride()
+        # Push one ride back 10 days so a "today" filter must exclude it.
+        Ride.objects.filter(pk=old_ride["id"]).update(
+            created_at=timezone.now() - timedelta(days=10)
+        )
+        self.login(self.admin)
+        today_str = timezone.localdate().isoformat()
+        resp = self.client.get(
+            reverse("management:ride-list"), {"date_from": today_str, "date_to": today_str}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = [r["id"] for r in resp.data["results"]]
+        self.assertIn(today_ride["id"], ids)
+        self.assertNotIn(old_ride["id"], ids)

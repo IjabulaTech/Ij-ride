@@ -57,6 +57,9 @@ export function listAdminRides(params: {
   page?: number;
   status?: string;
   search?: string;
+  /** Inclusive calendar-day bounds, YYYY-MM-DD (Yola local time). */
+  date_from?: string;
+  date_to?: string;
 }): Promise<Paginated<Ride>> {
   return api<Paginated<Ride>>(`/management/rides/${query(params)}`);
 }
