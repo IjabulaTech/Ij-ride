@@ -13,9 +13,11 @@ envVarGroups:
       - key: DEFAULT_COUNTRY_CODE
         value: "+234"
       - key: GEO_PROVIDER
-        value: mapbox # requires MAPBOX_ACCESS_TOKEN below; use "stub" for a keyless demo
+        value: osm # OpenStreetMap/Photon — best Adamawa coverage, keyless. ("mapbox"/"stub" also valid)
+      - key: GEO_OSM_BASE_URL
+        value: https://photon.komoot.io # swap for a self-hosted/commercial instance at scale
       - key: MAPBOX_ACCESS_TOKEN
-        sync: false # paste your Mapbox token in the Render dashboard
+        sync: false # still used for road routing (Directions API) when set
       - key: GEO_COUNTRY
         value: NG
       - key: GEO_PROXIMITY

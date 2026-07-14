@@ -16,6 +16,9 @@ env = environ.Env(
     JWT_REFRESH_DAYS=(int, 30),
     GEO_PROVIDER=(str, "stub"),
     MAPBOX_ACCESS_TOKEN=(str, ""),
+    # OSM place search (GEO_PROVIDER=osm). Photon's public instance by default;
+    # point at a self-hosted or commercial instance for higher volume.
+    GEO_OSM_BASE_URL=(str, "https://photon.komoot.io"),
     GEO_COUNTRY=(str, "NG"),
     GEO_PROXIMITY=(str, "12.4954,9.2035"),  # lng,lat bias center (Yola, Adamawa)
     RIDE_SEARCH_TIMEOUT_MINUTES=(int, 10),
@@ -123,9 +126,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Local phone numbers starting with 0 are normalized to this country code (E.164)
 DEFAULT_COUNTRY_CODE = env("DEFAULT_COUNTRY_CODE")
 
-# Geo provider: "stub" (dev, no keys) or "mapbox" (requires MAPBOX_ACCESS_TOKEN)
+# Geo provider: "stub" (dev, no keys), "osm" (OpenStreetMap/Photon — best
+# Adamawa coverage, keyless), or "mapbox" (requires MAPBOX_ACCESS_TOKEN).
 GEO_PROVIDER = env("GEO_PROVIDER")
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN")
+GEO_OSM_BASE_URL = env("GEO_OSM_BASE_URL")
 GEO_COUNTRY = env("GEO_COUNTRY")
 GEO_PROXIMITY = env("GEO_PROXIMITY")
 

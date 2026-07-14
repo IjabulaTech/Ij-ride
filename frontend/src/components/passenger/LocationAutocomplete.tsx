@@ -61,7 +61,7 @@ export function LocationAutocomplete({
 
     const timer = setTimeout(async () => {
       try {
-        const data = await geoApi.suggest(value.label, 6, proximity ?? null);
+        const data = await geoApi.suggest(value.label, 8, proximity ?? null);
         if (cancelled) return;
         // Deduplicate on the fuller address AND label; keep first occurrence.
         const seenAddress = new Set<string>();

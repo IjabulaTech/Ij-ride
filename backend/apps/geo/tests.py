@@ -11,6 +11,7 @@ from apps.accounts.services import register_passenger
 
 from .base import AddressNotFoundError, GeoServiceError
 from .providers.mapbox import MapboxGeoProvider
+from .providers.osm import OsmGeoProvider
 from .providers.stub import StubGeoProvider
 from .service import _provider_for, get_geo_provider
 from .utils import haversine_m
@@ -116,7 +117,10 @@ class MapboxProviderTests(SimpleTestCase):
         provider = MapboxGeoProvider()
         payload = {
             "features": [
-                {"center": [12.494400, 9.334500], "place_name": "Yola, Adamawa, Nigeria"}
+                {
+                    "geometry": {"coordinates": [12.494400, 9.334500]},
+                    "properties": {"name": "Yola", "full_address": "Yola, Adamawa, Nigeria"},
+                }
             ]
         }
         with mock.patch.object(provider.session, "get", return_value=self._response(payload)) as m:
@@ -125,7 +129,9 @@ class MapboxProviderTests(SimpleTestCase):
         self.assertEqual(result.lat, Decimal("9.334500"))
         self.assertEqual(result.lng, Decimal("12.494400"))
         params = m.call_args.kwargs["params"]
-        self.assertEqual(params["country"], "NG")
+        self.assertEqual(params["country"], "ng")
+        self.assertEqual(params["q"], "Yola")
+        self.assertEqual(params["bbox"], "11.3,7.4,13.7,11.4")
 
     def test_geocode_no_results_raises_not_found(self):
         provider = MapboxGeoProvider()
@@ -153,18 +159,20 @@ class MapboxProviderTests(SimpleTestCase):
                     (Decimal("9.2028"), Decimal("12.4810")),
                 )
 
-    def test_suggest_uses_autocomplete_bbox_types_language(self):
+    def test_suggest_uses_searchbox_bbox_types_language(self):
         provider = MapboxGeoProvider()
         # "Zerofoo" won't match the local POI dict so we exercise the Mapbox
-        # call path directly
+        # Search Box call path directly
         payload = {
             "features": [
                 {
-                    "center": [12.4473, 9.2611],
-                    "text": "Zerofoo Store",
-                    "place_name": "Zerofoo Store, Yola North, Adamawa, Nigeria",
-                    "place_type": ["poi"],
-                    "properties": {"category": "shopping"},
+                    "geometry": {"coordinates": [12.4473, 9.2611]},
+                    "properties": {
+                        "name": "Zerofoo Store",
+                        "full_address": "Zerofoo Store, Yola North, Adamawa, Nigeria",
+                        "feature_type": "poi",
+                        "poi_category": ["shopping"],
+                    },
                 },
             ]
         }
@@ -174,8 +182,8 @@ class MapboxProviderTests(SimpleTestCase):
         self.assertEqual(results[0].label, "Zerofoo Store")
         self.assertEqual(results[0].place_type, "shopping")
         params = m.call_args.kwargs["params"]
-        self.assertEqual(params["autocomplete"], "true")
-        self.assertEqual(params["country"], "NG")
+        self.assertEqual(params["q"], "Zerofoo")
+        self.assertEqual(params["country"], "ng")
         self.assertEqual(params["proximity"], "12.4954,9.2035")
         self.assertEqual(params["bbox"], "11.3,7.4,13.7,11.4")
         self.assertIn("poi", params["types"])
@@ -186,10 +194,12 @@ class MapboxProviderTests(SimpleTestCase):
         payload = {
             "features": [
                 {
-                    "center": [3.3792, 6.5244],
-                    "text": "Lagos Aunty Cafe",
-                    "place_name": "Lagos Aunty Cafe, Lagos, Nigeria",
-                    "place_type": ["poi"],
+                    "geometry": {"coordinates": [3.3792, 6.5244]},
+                    "properties": {
+                        "name": "Lagos Aunty Cafe",
+                        "full_address": "Lagos Aunty Cafe, Lagos, Nigeria",
+                        "feature_type": "poi",
+                    },
                 },
             ]
         }
@@ -218,7 +228,10 @@ class MapboxProviderTests(SimpleTestCase):
         provider = MapboxGeoProvider()
         payload = {
             "features": [
-                {"center": [12.4948, 9.3350], "place_name": "AUN, Yola, Adamawa, Nigeria"}
+                {
+                    "geometry": {"coordinates": [12.4948, 9.3350]},
+                    "properties": {"name": "AUN", "full_address": "AUN, Yola, Adamawa, Nigeria"},
+                }
             ]
         }
         with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
@@ -230,6 +243,104 @@ class MapboxProviderTests(SimpleTestCase):
         with mock.patch.object(provider.session, "get", return_value=self._response({}, status=500)):
             result = provider.reverse_geocode(Decimal("9.20"), Decimal("12.50"))
         self.assertIn("Pinned location", result.address)
+
+
+@override_settings(
+    GEO_OSM_BASE_URL="https://photon.test",
+    GEO_COUNTRY="NG",
+    GEO_PROXIMITY="12.4954,9.2035",
+)
+class OsmProviderTests(SimpleTestCase):
+    def _response(self, payload, status=200):
+        resp = mock.Mock()
+        resp.status_code = status
+        resp.json.return_value = payload
+        return resp
+
+    @staticmethod
+    def _feature(name, lng, lat, *, cc="NG", state="Adamawa", value="hotel", city="Yola"):
+        return {
+            "geometry": {"coordinates": [lng, lat]},
+            "properties": {
+                "name": name,
+                "osm_value": value,
+                "city": city,
+                "state": state,
+                "countrycode": cc,
+            },
+        }
+
+    def test_suggest_filters_to_adamawa_and_parses(self):
+        provider = OsmGeoProvider()
+        payload = {
+            "features": [
+                self._feature("Madugu Rockview Hotel", 12.45, 9.19),
+                # Border town the bbox clips in — different country, must drop
+                self._feature("Hotel Ribadou", 13.4, 9.3, cc="CM", state="North", city="Garoua"),
+            ]
+        }
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)) as m:
+            results = provider.suggest("Rockview", limit=6)
+        labels = [r.label for r in results]
+        self.assertIn("Madugu Rockview Hotel", labels)
+        self.assertNotIn("Hotel Ribadou", labels)  # Cameroon filtered out
+        self.assertEqual(results[0].place_type, "hotel")
+        self.assertIn("Adamawa", results[0].address)
+        params = m.call_args.kwargs["params"]
+        self.assertEqual(params["q"], "Rockview")
+        self.assertEqual(params["bbox"], "11.3,7.4,13.7,11.4")
+        self.assertEqual(params["lat"], "9.2035")
+        self.assertEqual(params["lon"], "12.4954")
+
+    def test_suggest_prefers_local_poi(self):
+        provider = OsmGeoProvider()
+        payload = {"features": [self._feature("Somewhere Else", 12.4, 9.2)]}
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
+            results = provider.suggest("AUN", limit=5)
+        self.assertEqual(results[0].label, "American University of Nigeria")
+
+    def test_geocode_returns_first_adamawa_hit(self):
+        provider = OsmGeoProvider()
+        payload = {
+            "features": [
+                self._feature("Elsewhere", 3.3, 6.5, cc="NG", state="Lagos"),  # filtered
+                self._feature("Jimeta Modern Market", 12.46, 9.28, value="marketplace"),
+            ]
+        }
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
+            result = provider.geocode("Jimeta Modern Market")
+        self.assertIn("Jimeta Modern Market", result.address)
+        self.assertEqual(result.lat, Decimal("9.280000"))
+
+    def test_geocode_no_results_raises(self):
+        provider = OsmGeoProvider()
+        with mock.patch.object(provider.session, "get", return_value=self._response({"features": []})):
+            with self.assertRaises(AddressNotFoundError):
+                provider.geocode("nowhere at all")
+
+    def test_reverse_geocode_parses(self):
+        provider = OsmGeoProvider()
+        payload = {"features": [self._feature("AUN", 12.4948, 9.3350, value="university")]}
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
+            result = provider.reverse_geocode(Decimal("9.3350"), Decimal("12.4948"))
+        self.assertIn("AUN", result.address)
+        self.assertEqual(result.lat, Decimal("9.3350"))
+
+    def test_suggest_swallows_provider_errors(self):
+        provider = OsmGeoProvider()
+        with mock.patch.object(provider.session, "get", return_value=self._response({}, status=500)):
+            # Non-local query + provider error -> empty, no raise
+            self.assertEqual(provider.suggest("Rockview"), [])
+
+    @override_settings(MAPBOX_ACCESS_TOKEN="")
+    def test_route_falls_back_to_haversine_without_token(self):
+        provider = OsmGeoProvider()
+        route = provider.route(
+            (Decimal("9.3345"), Decimal("12.4944")), (Decimal("9.2028"), Decimal("12.4810"))
+        )
+        straight = haversine_m("9.3345", "12.4944", "9.2028", "12.4810")
+        self.assertEqual(route.distance_m, round(straight * 1.4))
+        self.assertGreater(route.duration_s, 0)
 
 
 class GeoApiTests(APITestCase):
