@@ -233,6 +233,64 @@ YOLA_POIS: tuple[LocalPOI, ...] = (
         Decimal("9.208000"), Decimal("12.490000"),
         "road", ("Atiku Road",),
     ),
+
+    # ---- Hotels & hospitality ----
+    LocalPOI(
+        "Madugu Rockview Hotel",
+        "Madugu Rockview Hotel, Jimeta, Yola North, Adamawa",
+        Decimal("9.260341"), Decimal("12.472910"),
+        "hotel", ("Rockview", "Madugu Hotel", "hotel"),
+    ),
+
+    # ---- Institutions verified from OpenStreetMap ----
+    LocalPOI(
+        "Modibbo Adama University Teaching Hospital",
+        "MAU Teaching Hospital, Yola South, Adamawa",
+        Decimal("9.193663"), Decimal("12.491457"),
+        "hospital", ("MAU Teaching Hospital", "Teaching Hospital"),
+    ),
+    LocalPOI(
+        "Federal College of Education Yola",
+        "Federal College of Education, Yola, Adamawa",
+        Decimal("9.246030"), Decimal("12.464168"),
+        "college", ("FCE", "FCE Yola", "College of Education"),
+    ),
+    LocalPOI(
+        "Keystone Bank Yola",
+        "Keystone Bank, Yola, Adamawa",
+        Decimal("9.205327"), Decimal("12.486615"),
+        "bank", ("Keystone Bank",),
+    ),
+    LocalPOI(
+        "Yola Central Mosque",
+        "Yola Central Mosque, Yola, Adamawa",
+        Decimal("9.207726"), Decimal("12.477894"),
+        "place_of_worship", ("Yola Mosque", "Central Mosque", "Jumaat"),
+    ),
+    LocalPOI(
+        "St Vincent de Paul Catholic Church",
+        "St Vincent de Paul Catholic Chaplaincy, Girei, Adamawa",
+        Decimal("9.344416"), Decimal("12.496787"),
+        "place_of_worship", ("St Vincent", "Catholic Church", "church"),
+    ),
+    LocalPOI(
+        "Nassarawo Clinic",
+        "Nassarawo Clinic, Jimeta, Yola North, Adamawa",
+        Decimal("9.280182"), Decimal("12.443967"),
+        "clinic", ("Nassarawo Clinic",),
+    ),
+
+    # ---- More neighborhoods / areas verified from OpenStreetMap ----
+    LocalPOI(
+        "Jambutu", "Jambutu, Yola North, Adamawa",
+        Decimal("9.283333"), Decimal("12.416667"),
+        "neighborhood", ("Jambutu Roundabout",),
+    ),
+    LocalPOI(
+        "Kofare", "Kofare, Yola South, Adamawa",
+        Decimal("9.333333"), Decimal("12.466667"),
+        "neighborhood", (),
+    ),
 )
 
 

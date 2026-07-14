@@ -330,7 +330,7 @@ class OsmProviderTests(SimpleTestCase):
         provider = OsmGeoProvider()
         with mock.patch.object(provider.session, "get", return_value=self._response({}, status=500)):
             # Non-local query + provider error -> empty, no raise
-            self.assertEqual(provider.suggest("Rockview"), [])
+            self.assertEqual(provider.suggest("Zerofoo-nowhere"), [])
 
     @override_settings(MAPBOX_ACCESS_TOKEN="")
     def test_route_falls_back_to_haversine_without_token(self):
