@@ -16,6 +16,9 @@ env = environ.Env(
     JWT_REFRESH_DAYS=(int, 30),
     GEO_PROVIDER=(str, "stub"),
     MAPBOX_ACCESS_TOKEN=(str, ""),
+    # Google Maps place search (GEO_PROVIDER=google) — best Nigeria POI coverage.
+    # Needs "Places API (New)" + "Geocoding API" enabled on the key.
+    GOOGLE_MAPS_API_KEY=(str, ""),
     # OSM place search (GEO_PROVIDER=osm). Photon's public instance by default;
     # point at a self-hosted or commercial instance for higher volume.
     GEO_OSM_BASE_URL=(str, "https://photon.komoot.io"),
@@ -126,10 +129,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Local phone numbers starting with 0 are normalized to this country code (E.164)
 DEFAULT_COUNTRY_CODE = env("DEFAULT_COUNTRY_CODE")
 
-# Geo provider: "stub" (dev, no keys), "osm" (OpenStreetMap/Photon — best
-# Adamawa coverage, keyless), or "mapbox" (requires MAPBOX_ACCESS_TOKEN).
+# Geo provider: "stub" (dev, no keys), "google" (best Nigeria POI coverage,
+# needs GOOGLE_MAPS_API_KEY + billing), "osm" (OpenStreetMap/Photon, keyless),
+# or "mapbox" (requires MAPBOX_ACCESS_TOKEN).
 GEO_PROVIDER = env("GEO_PROVIDER")
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN")
+GOOGLE_MAPS_API_KEY = env("GOOGLE_MAPS_API_KEY")
 GEO_OSM_BASE_URL = env("GEO_OSM_BASE_URL")
 GEO_COUNTRY = env("GEO_COUNTRY")
 GEO_PROXIMITY = env("GEO_PROXIMITY")

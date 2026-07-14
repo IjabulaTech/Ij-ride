@@ -13,9 +13,11 @@ envVarGroups:
       - key: DEFAULT_COUNTRY_CODE
         value: "+234"
       - key: GEO_PROVIDER
-        value: osm # OpenStreetMap/Photon — best Adamawa coverage, keyless. ("mapbox"/"stub" also valid)
+        value: google # Google Places — best Nigeria POI coverage. ("osm"/"mapbox"/"stub" also valid)
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false # paste your key in the dashboard; enable Places API (New) + Geocoding API
       - key: GEO_OSM_BASE_URL
-        value: https://photon.komoot.io # swap for a self-hosted/commercial instance at scale
+        value: https://photon.komoot.io # used only when GEO_PROVIDER=osm
       - key: MAPBOX_ACCESS_TOKEN
         sync: false # still used for road routing (Directions API) when set
       - key: GEO_COUNTRY

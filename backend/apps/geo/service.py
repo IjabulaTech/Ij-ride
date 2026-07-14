@@ -21,7 +21,13 @@ def _provider_for(name: str) -> GeoProvider:
         from .providers.osm import OsmGeoProvider
 
         return OsmGeoProvider()
-    raise ValueError(f"Unknown GEO_PROVIDER '{name}'. Expected 'stub', 'mapbox', or 'osm'.")
+    if name == "google":
+        from .providers.google import GoogleGeoProvider
+
+        return GoogleGeoProvider()
+    raise ValueError(
+        f"Unknown GEO_PROVIDER '{name}'. Expected 'stub', 'mapbox', 'osm', or 'google'."
+    )
 
 
 def get_geo_provider() -> GeoProvider:

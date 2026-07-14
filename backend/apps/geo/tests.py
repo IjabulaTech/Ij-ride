@@ -10,6 +10,7 @@ from rest_framework.test import APITestCase
 from apps.accounts.services import register_passenger
 
 from .base import AddressNotFoundError, GeoServiceError
+from .providers.google import GoogleGeoProvider
 from .providers.mapbox import MapboxGeoProvider
 from .providers.osm import OsmGeoProvider
 from .providers.stub import StubGeoProvider
@@ -341,6 +342,92 @@ class OsmProviderTests(SimpleTestCase):
         straight = haversine_m("9.3345", "12.4944", "9.2028", "12.4810")
         self.assertEqual(route.distance_m, round(straight * 1.4))
         self.assertGreater(route.duration_s, 0)
+
+
+@override_settings(GOOGLE_MAPS_API_KEY="test-google-key", MAPBOX_ACCESS_TOKEN="")
+class GoogleProviderTests(SimpleTestCase):
+    def _response(self, payload, status=200):
+        resp = mock.Mock()
+        resp.status_code = status
+        resp.json.return_value = payload
+        return resp
+
+    @staticmethod
+    def _place(name, lat, lng, *, ptype="lodging", addr=None):
+        return {
+            "displayName": {"text": name},
+            "formattedAddress": addr or f"{name}, Yola, Adamawa, Nigeria",
+            "location": {"latitude": lat, "longitude": lng},
+            "primaryType": ptype,
+            "types": [ptype],
+        }
+
+    def test_suggest_parses_places_and_restricts_to_adamawa(self):
+        provider = GoogleGeoProvider()
+        payload = {"places": [self._place("Grand Peace Hotel", 9.26, 12.47)]}
+        with mock.patch.object(provider.session, "post", return_value=self._response(payload)) as m:
+            results = provider.suggest("Grand Peace Hotel", limit=6)
+        self.assertEqual(results[0].label, "Grand Peace Hotel")
+        self.assertEqual(results[0].place_type, "lodging")
+        self.assertEqual(results[0].lat, Decimal("9.260000"))
+        body = m.call_args.kwargs["json"]
+        self.assertEqual(body["textQuery"], "Grand Peace Hotel")
+        self.assertEqual(body["regionCode"], "NG")
+        self.assertIn("locationRestriction", body)
+        self.assertEqual(body["locationRestriction"]["rectangle"]["low"]["latitude"], 7.4)
+        headers = m.call_args.kwargs["headers"]
+        self.assertEqual(headers["X-Goog-Api-Key"], "test-google-key")
+        self.assertIn("places.location", headers["X-Goog-FieldMask"])
+
+    def test_suggest_prefers_local_poi(self):
+        provider = GoogleGeoProvider()
+        payload = {"places": [self._place("Somewhere", 9.2, 12.4)]}
+        with mock.patch.object(provider.session, "post", return_value=self._response(payload)):
+            results = provider.suggest("AUN", limit=5)
+        self.assertEqual(results[0].label, "American University of Nigeria")
+
+    def test_geocode_returns_first_place(self):
+        provider = GoogleGeoProvider()
+        payload = {"places": [self._place("Jimeta Modern Market", 9.261, 12.447, ptype="market")]}
+        with mock.patch.object(provider.session, "post", return_value=self._response(payload)):
+            result = provider.geocode("Jimeta Modern Market")
+        self.assertIn("Jimeta Modern Market", result.address)
+        self.assertEqual(result.lat, Decimal("9.261000"))
+
+    def test_geocode_no_results_raises(self):
+        provider = GoogleGeoProvider()
+        with mock.patch.object(provider.session, "post", return_value=self._response({"places": []})):
+            with self.assertRaises(AddressNotFoundError):
+                provider.geocode("nowhere at all xyz")
+
+    def test_reverse_geocode_parses(self):
+        provider = GoogleGeoProvider()
+        payload = {"results": [{"formatted_address": "AUN, Yola, Adamawa, Nigeria"}]}
+        with mock.patch.object(provider.session, "get", return_value=self._response(payload)):
+            result = provider.reverse_geocode(Decimal("9.3350"), Decimal("12.4948"))
+        self.assertIn("AUN", result.address)
+        self.assertEqual(result.lat, Decimal("9.3350"))
+
+    def test_suggest_swallows_errors(self):
+        provider = GoogleGeoProvider()
+        with mock.patch.object(provider.session, "post", return_value=self._response({}, status=500)):
+            self.assertEqual(provider.suggest("Zerofoo-nowhere"), [])
+
+    @override_settings(GOOGLE_MAPS_API_KEY="")
+    def test_missing_key_degrades_gracefully(self):
+        provider = GoogleGeoProvider()
+        # No key: non-local query yields nothing rather than raising / 500ing
+        self.assertEqual(provider.suggest("Zerofoo-nowhere"), [])
+        r = provider.reverse_geocode(Decimal("9.2"), Decimal("12.5"))
+        self.assertIn("Pinned location", r.address)
+
+    def test_route_uses_haversine_without_mapbox_token(self):
+        provider = GoogleGeoProvider()
+        route = provider.route(
+            (Decimal("9.3345"), Decimal("12.4944")), (Decimal("9.2028"), Decimal("12.4810"))
+        )
+        straight = haversine_m("9.3345", "12.4944", "9.2028", "12.4810")
+        self.assertEqual(route.distance_m, round(straight * 1.4))
 
 
 class GeoApiTests(APITestCase):

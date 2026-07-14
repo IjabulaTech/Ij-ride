@@ -27,19 +27,15 @@ from ..base import (
     GeocodeResult,
     GeoProvider,
     GeoServiceError,
-    RouteResult,
     Suggestion,
 )
-from ..utils import haversine_m
+from ..routing import road_route
 from ..yola_poi import match as poi_match
 
 TIMEOUT_S = 10
 _SIX_DP = Decimal("0.000001")
 # Adamawa State bounding box (approx.) as minLng,minLat,maxLng,maxLat.
 ADAMAWA_BBOX = (11.3, 7.4, 13.7, 11.4)
-# Assumed average city driving speed for the no-router fallback (~30 km/h).
-_FALLBACK_SPEED_MPS = 8.3
-_ROAD_FACTOR = 1.4  # straight-line → road distance multiplier
 
 
 def _decimal(value) -> Decimal:
@@ -210,16 +206,5 @@ class OsmGeoProvider(GeoProvider):
             return GeocodeResult(address=", ".join(parts), lat=lat, lng=lng)
         return GeocodeResult(address=fallback, lat=lat, lng=lng)
 
-    def route(self, origin, destination) -> RouteResult:
-        # Prefer real road routing (Mapbox Directions) when a token is set;
-        # otherwise estimate from straight-line distance so fares still work.
-        if settings.MAPBOX_ACCESS_TOKEN:
-            try:
-                from .mapbox import MapboxGeoProvider
-
-                return MapboxGeoProvider().route(origin, destination)
-            except GeoServiceError:
-                pass
-        straight = haversine_m(origin[0], origin[1], destination[0], destination[1])
-        road = round(straight * _ROAD_FACTOR)
-        return RouteResult(distance_m=road, duration_s=round(road / _FALLBACK_SPEED_MPS))
+    def route(self, origin, destination):
+        return road_route(origin, destination)
