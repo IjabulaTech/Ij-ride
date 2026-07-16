@@ -88,7 +88,7 @@ export function RegisterForm({ role }: { role: "passenger" | "driver" }) {
                 onClick={() => setDriverCategory(c)}
                 className={`rounded-lg border px-3 py-3 text-sm font-semibold ${
                   driverCategory === c
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
                     : "border-gray-300 bg-white text-gray-700"
                 }`}
               >
@@ -150,7 +150,7 @@ export function RegisterForm({ role }: { role: "passenger" | "driver" }) {
       </Button>
       <p className="text-center text-sm text-gray-600">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-emerald-600 hover:underline">
+        <Link href="/login" className="font-semibold text-blue-600 hover:underline">
           Log in
         </Link>
       </p>

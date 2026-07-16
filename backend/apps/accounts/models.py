@@ -18,6 +18,11 @@ phone_validator = RegexValidator(
     message="Phone number must be in international format, e.g. +2348031234567.",
 )
 
+nin_validator = RegexValidator(
+    regex=r"^\d{11}$",
+    message="NIN must be exactly 11 digits.",
+)
+
 
 class User(AbstractUser):
     """Phone number is the primary login identifier; email is optional.
@@ -37,6 +42,12 @@ class User(AbstractUser):
         default=UserRole.PASSENGER,
         db_index=True,
     )
+    # National Identification Number (11 digits). Optional; captured on the
+    # user's profile. `nin_verified` is set by an admin after review (and, in
+    # future, an automated NIMC + face-match check — see nin_verification.py).
+    nin = models.CharField(max_length=11, blank=True, default="", validators=[nin_validator])
+    nin_verified = models.BooleanField(default=False)
+    nin_verified_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = "phone"
     REQUIRED_FIELDS = []
@@ -50,6 +61,12 @@ class User(AbstractUser):
                 fields=["email"],
                 condition=~models.Q(email=""),
                 name="accounts_user_unique_email_when_set",
+            ),
+            # NIN optional, but no two users may share one once provided
+            models.UniqueConstraint(
+                fields=["nin"],
+                condition=~models.Q(nin=""),
+                name="accounts_user_unique_nin_when_set",
             ),
         ]
 

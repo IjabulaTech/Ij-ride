@@ -2,14 +2,17 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { NinField } from "@/components/profile/NinField";
 import { Alert } from "@/components/ui/Alert";
 import { approvalStatusTone, Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { updateMe } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import * as driverApi from "@/lib/api/driver";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { VEHICLE_CATEGORY_ICONS, VEHICLE_CATEGORY_LABELS } from "@/lib/format";
 import type { DriverProfile, Vehicle, VehicleCategory } from "@/types/api";
 
@@ -18,8 +21,10 @@ type Message = { tone: "success" | "error"; text: string } | null;
 const CATEGORIES: VehicleCategory[] = ["KEKE", "CAR"];
 
 export default function OnboardingPage() {
+  const { user, refreshUser } = useAuth();
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [license, setLicense] = useState("");
+  const [nin, setNin] = useState(user?.nin ?? "");
   const [driverPhotoFile, setDriverPhotoFile] = useState<File | null>(null);
   const [driverPhotoPreview, setDriverPhotoPreview] = useState<string | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
@@ -95,6 +100,11 @@ export default function OnboardingPage() {
         license_number: license,
         photo: driverPhotoFile,
       });
+      // NIN lives on the user account (shared with passengers), saved separately
+      if (nin !== (user?.nin ?? "")) {
+        await updateMe({ nin });
+        await refreshUser();
+      }
       setProfile(updated);
       setDriverPhotoFile(null);
       setDriverPhotoPreview(updated.photo_url);
@@ -203,6 +213,7 @@ export default function OnboardingPage() {
               required
             />
           )}
+          <NinField value={nin} onChange={setNin} verified={user?.nin_verified ?? false} />
           <Button type="submit" fullWidth loading={profileBusy}>
             Save profile
           </Button>

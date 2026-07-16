@@ -51,9 +51,10 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <Alert tone="error">{error}</Alert>}
         <Input
-          label="Phone number"
-          type="tel"
-          placeholder="08031234567"
+          label="Phone number or email"
+          type="text"
+          autoComplete="username"
+          placeholder="08031234567 or you@email.com"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           required
@@ -68,7 +69,7 @@ export default function LoginPage() {
         <div className="text-right">
           <Link
             href="/forgot-password"
-            className="text-sm font-semibold text-emerald-600 hover:underline"
+            className="text-sm font-semibold text-blue-600 hover:underline"
           >
             Forgot password?
           </Link>
@@ -79,7 +80,7 @@ export default function LoginPage() {
         <div className="space-y-1 text-center text-sm text-gray-600">
           <p>
             New here?{" "}
-            <Link href="/register" className="font-semibold text-emerald-600 hover:underline">
+            <Link href="/register" className="font-semibold text-blue-600 hover:underline">
               Create a passenger account
             </Link>
           </p>
@@ -87,7 +88,7 @@ export default function LoginPage() {
             Want to drive?{" "}
             <Link
               href="/register/driver"
-              className="font-semibold text-emerald-600 hover:underline"
+              className="font-semibold text-blue-600 hover:underline"
             >
               Sign up as a driver
             </Link>

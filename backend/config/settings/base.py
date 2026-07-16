@@ -26,6 +26,9 @@ env = environ.Env(
     GEO_PROXIMITY=(str, "12.4954,9.2035"),  # lng,lat bias center (Yola, Adamawa)
     RIDE_SEARCH_TIMEOUT_MINUTES=(int, 10),
     PUBLIC_BASE_URL=(str, "http://127.0.0.1:8000"),
+    # NIN verification provider. "stub" = format check + manual admin review.
+    # Swap for a licensed aggregator (Dojah/Smile ID/…) when available.
+    NIN_PROVIDER=(str, "stub"),
     # Password-reset OTP delivery: "console" logs the code; "termii" sends SMS
     OTP_PROVIDER=(str, "console"),
     OTP_CODE_TTL_MINUTES=(int, 10),
@@ -141,6 +144,9 @@ GEO_PROXIMITY = env("GEO_PROXIMITY")
 
 # A SEARCHING ride nobody accepts within this window becomes EXPIRED
 RIDE_SEARCH_TIMEOUT_MINUTES = env("RIDE_SEARCH_TIMEOUT_MINUTES")
+
+# NIN verification provider (see apps/accounts/nin_verification.py)
+NIN_PROVIDER = env("NIN_PROVIDER")
 
 # Password-reset OTP delivery
 OTP_PROVIDER = env("OTP_PROVIDER")

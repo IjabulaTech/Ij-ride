@@ -245,3 +245,98 @@ class PasswordResetTests(APITestCase):
         resp = self.confirm_reset("+2348031110030", code, new_password="12345678")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("new_password", resp.data)
+
+
+class EmailLoginTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            phone="+2348031119001", password=PASSWORD, email="rider@example.com", first_name="Ada"
+        )
+
+    def test_login_with_phone(self):
+        resp = self.client.post(reverse("accounts:token"), {"phone": "08031119001", "password": PASSWORD})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertIn("access", resp.data)
+
+    def test_login_with_email(self):
+        resp = self.client.post(
+            reverse("accounts:token"), {"phone": "rider@example.com", "password": PASSWORD}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(resp.data["user"]["phone"], "+2348031119001")
+
+    def test_login_with_email_case_insensitive(self):
+        resp = self.client.post(
+            reverse("accounts:token"), {"phone": "RIDER@EXAMPLE.COM", "password": PASSWORD}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+
+    def test_login_with_unknown_email_fails(self):
+        resp = self.client.post(
+            reverse("accounts:token"), {"phone": "nobody@example.com", "password": PASSWORD}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class NinTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(phone="+2348031119010", password=PASSWORD)
+        self.admin = User.objects.create_user(
+            phone="+2348031119099", password=PASSWORD, role=UserRole.ADMIN
+        )
+
+    def test_user_can_save_valid_nin(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(reverse("accounts:me"), {"nin": "12345678901"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(resp.data["nin"], "12345678901")
+        self.assertFalse(resp.data["nin_verified"])
+
+    def test_invalid_nin_rejected(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(reverse("accounts:me"), {"nin": "12345"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("nin", resp.data)
+
+    def test_duplicate_nin_rejected(self):
+        User.objects.filter(pk=self.user.pk).update(nin="11122233344")
+        other = User.objects.create_user(phone="+2348031119011", password=PASSWORD)
+        self.client.force_authenticate(other)
+        resp = self.client.patch(reverse("accounts:me"), {"nin": "11122233344"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("nin", resp.data)
+
+    def test_admin_verifies_nin(self):
+        User.objects.filter(pk=self.user.pk).update(nin="12345678901")
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(
+            reverse("management:user-verify-nin", args=[self.user.pk]), {"verified": True}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.nin_verified)
+        self.assertIsNotNone(self.user.nin_verified_at)
+
+    def test_cannot_verify_missing_nin(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(
+            reverse("management:user-verify-nin", args=[self.user.pk]), {"verified": True}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_changing_verified_nin_resets_verification(self):
+        User.objects.filter(pk=self.user.pk).update(nin="12345678901", nin_verified=True)
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(reverse("accounts:me"), {"nin": "99988877766"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertFalse(resp.data["nin_verified"])
+
+    def test_non_admin_cannot_verify(self):
+        User.objects.filter(pk=self.user.pk).update(nin="12345678901")
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            reverse("management:user-verify-nin", args=[self.user.pk]), {"verified": True}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)

@@ -65,6 +65,7 @@ export interface UpdateMeData {
   first_name?: string;
   last_name?: string;
   email?: string;
+  nin?: string;
   default_payment_method?: PaymentMethod;
 }
 

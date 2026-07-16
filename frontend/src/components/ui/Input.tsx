@@ -15,7 +15,7 @@ export function Input({ label, error, hint, id, className = "", ...rest }: Input
       </label>
       <input
         id={inputId}
-        className={`block w-full rounded-lg border px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+        className={`block w-full rounded-lg border px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
           error ? "border-red-400" : "border-gray-300"
         } ${className}`}
         {...rest}

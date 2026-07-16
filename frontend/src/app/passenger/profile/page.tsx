@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { NinField } from "@/components/profile/NinField";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -19,6 +20,7 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+  const [nin, setNin] = useState(user?.nin ?? "");
   const [method, setMethod] = useState<PaymentMethod>(
     profile?.default_payment_method ?? "CASH"
   );
@@ -34,6 +36,7 @@ export default function ProfilePage() {
         first_name: firstName,
         last_name: lastName,
         email,
+        nin,
         default_payment_method: method,
       });
       await refreshUser();
@@ -73,6 +76,7 @@ export default function ProfilePage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
+          <NinField value={nin} onChange={setNin} verified={user?.nin_verified ?? false} />
           <div>
             <p className="mb-2 text-sm font-medium text-gray-700">Default payment method</p>
             <div className="grid grid-cols-2 gap-2">

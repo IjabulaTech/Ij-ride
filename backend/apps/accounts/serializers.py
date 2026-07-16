@@ -8,13 +8,17 @@ from apps.payments.constants import PaymentMethod
 
 from . import services
 from .models import PassengerProfile, User
+from .nin_verification import valid_format as valid_nin_format
 from .utils import normalize_phone
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "phone", "first_name", "last_name", "email", "role", "date_joined")
+        fields = (
+            "id", "phone", "first_name", "last_name", "email", "role",
+            "nin", "nin_verified", "date_joined",
+        )
         read_only_fields = fields
 
 
@@ -35,6 +39,9 @@ class DriverProfileSummarySerializer(serializers.Serializer):
 
 class MeSerializer(serializers.ModelSerializer):
     profile = serializers.SerializerMethodField()
+    # NIN is writable here; verification status is set by an admin, so read-only
+    nin = serializers.CharField(required=False, allow_blank=True, max_length=11)
+    nin_verified = serializers.BooleanField(read_only=True)
     # Writable for passengers only; ignored for other roles
     default_payment_method = serializers.ChoiceField(
         choices=PaymentMethod.choices, write_only=True, required=False
@@ -49,11 +56,13 @@ class MeSerializer(serializers.ModelSerializer):
             "last_name",
             "email",
             "role",
+            "nin",
+            "nin_verified",
             "date_joined",
             "profile",
             "default_payment_method",
         )
-        read_only_fields = ("id", "phone", "role", "date_joined")
+        read_only_fields = ("id", "phone", "role", "nin_verified", "date_joined")
 
     def get_profile(self, user):
         if user.is_passenger and hasattr(user, "passenger_profile"):
@@ -67,8 +76,23 @@ class MeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("A user with this email already exists.")
         return value
 
+    def validate_nin(self, value):
+        value = (value or "").strip()
+        if not value:
+            return value
+        if not valid_nin_format(value):
+            raise serializers.ValidationError("NIN must be exactly 11 digits.")
+        if User.objects.exclude(pk=self.instance.pk).filter(nin=value).exists():
+            raise serializers.ValidationError("This NIN is already linked to another account.")
+        return value
+
     def update(self, user, validated_data):
         method = validated_data.pop("default_payment_method", None)
+        # Changing the NIN invalidates any prior verification — it must be
+        # reviewed again against the new number.
+        if "nin" in validated_data and validated_data["nin"] != user.nin:
+            user.nin_verified = False
+            user.nin_verified_at = None
         user = super().update(user, validated_data)
         if method and user.is_passenger and hasattr(user, "passenger_profile"):
             user.passenger_profile.default_payment_method = method
@@ -146,14 +170,27 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 
 class PhoneTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Accepts local ('0803...') or international phone formats and adds the
-    user payload to the login response."""
+    """Login with EITHER a phone number or an email address.
+
+    The identifier arrives in the phone field (the USERNAME_FIELD). If it looks
+    like an email we resolve it to the account's phone; otherwise we normalize
+    local ('0803...') / international phone formats. Adds the user payload to the
+    login response.
+    """
 
     def validate(self, attrs):
-        try:
-            attrs[self.username_field] = normalize_phone(attrs[self.username_field])
-        except DjangoValidationError:
-            pass  # let authentication fail with the generic credentials error
+        identifier = attrs.get(self.username_field, "")
+        if "@" in identifier:
+            user = User.objects.filter(email__iexact=identifier.strip()).first()
+            if user:
+                # Authenticate against the account's real username field (phone)
+                attrs[self.username_field] = user.phone
+            # else: leave as-is so auth fails with the generic credentials error
+        else:
+            try:
+                attrs[self.username_field] = normalize_phone(identifier)
+            except DjangoValidationError:
+                pass  # let authentication fail with the generic credentials error
         data = super().validate(attrs)
         data["user"] = UserSerializer(self.user).data
         return data

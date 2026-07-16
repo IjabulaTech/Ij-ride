@@ -128,7 +128,7 @@ export default function ForgotPasswordPage() {
               setStep("request");
               setCode("");
             }}
-            className="w-full text-center text-sm font-semibold text-emerald-600 hover:underline"
+            className="w-full text-center text-sm font-semibold text-blue-600 hover:underline"
           >
             Use a different phone number
           </button>
@@ -159,7 +159,7 @@ export default function ForgotPasswordPage() {
         </Button>
         <p className="text-center text-sm text-gray-600">
           Remembered it?{" "}
-          <Link href="/login" className="font-semibold text-emerald-600 hover:underline">
+          <Link href="/login" className="font-semibold text-blue-600 hover:underline">
             Back to login
           </Link>
         </p>

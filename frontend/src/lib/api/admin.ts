@@ -39,6 +39,17 @@ export function getDriver(id: number): Promise<AdminDriver> {
   return api<AdminDriver>(`/management/drivers/${id}/`);
 }
 
+/** Admin marks a user's NIN verified/unverified after review. */
+export function verifyNin(
+  userId: number,
+  verified: boolean
+): Promise<{ id: number; nin: string; nin_verified: boolean }> {
+  return api(`/management/users/${userId}/verify-nin/`, {
+    method: "POST",
+    body: { verified },
+  });
+}
+
 export function approveDriver(id: number, note = ""): Promise<AdminDriver> {
   return api<AdminDriver>(`/management/drivers/${id}/approve/`, {
     method: "POST",

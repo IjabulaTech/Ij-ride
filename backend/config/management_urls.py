@@ -5,7 +5,7 @@ domain apps. Rides and payments management arrive in Modules 6-7.
 """
 from django.urls import path
 
-from apps.accounts.management_views import UserListView
+from apps.accounts.management_views import UserListView, VerifyNinView
 from apps.drivers.management_views import (
     ApproveDriverView,
     DriverDetailView,
@@ -26,6 +26,7 @@ app_name = "management"
 
 urlpatterns = [
     path("users/", UserListView.as_view(), name="user-list"),
+    path("users/<int:pk>/verify-nin/", VerifyNinView.as_view(), name="user-verify-nin"),
     path("drivers/", DriverListView.as_view(), name="driver-list"),
     path("drivers/<int:pk>/", DriverDetailView.as_view(), name="driver-detail"),
     path("drivers/<int:pk>/approve/", ApproveDriverView.as_view(), name="driver-approve"),

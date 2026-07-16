@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api/client";
-import { approveDriver, getDriver, rejectDriver } from "@/lib/api/admin";
+import { approveDriver, getDriver, rejectDriver, verifyNin } from "@/lib/api/admin";
 import { formatDateTime, VEHICLE_CATEGORY_LABELS } from "@/lib/format";
 import type { AdminDriver } from "@/types/api";
 
@@ -30,8 +30,23 @@ export default function AdminDriverDetailPage() {
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const [ninBusy, setNinBusy] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+
+  async function toggleNin(verified: boolean) {
+    if (!driver) return;
+    setNinBusy(true);
+    setError("");
+    try {
+      const res = await verifyNin(driver.user.id, verified);
+      setDriver({ ...driver, user: { ...driver.user, nin_verified: res.nin_verified } });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update NIN status.");
+    } finally {
+      setNinBusy(false);
+    }
+  }
 
   useEffect(() => {
     getDriver(Number(params.id))
@@ -135,6 +150,33 @@ export default function AdminDriverDetailPage() {
         </div>
         {driver.approval_note && (
           <Alert tone="info">Last review note: {driver.approval_note}</Alert>
+        )}
+      </Card>
+
+      <Card className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-semibold text-gray-900">NIN verification</h3>
+          <Badge tone={driver.user.nin_verified ? "green" : "gray"}>
+            {driver.user.nin_verified ? "Verified" : "Not verified"}
+          </Badge>
+        </div>
+        <Field label="NIN" value={driver.user.nin} />
+        {driver.user.nin ? (
+          driver.user.nin_verified ? (
+            <Button
+              variant="secondary"
+              loading={ninBusy}
+              onClick={() => toggleNin(false)}
+            >
+              Mark as not verified
+            </Button>
+          ) : (
+            <Button loading={ninBusy} onClick={() => toggleNin(true)}>
+              Mark NIN verified
+            </Button>
+          )
+        ) : (
+          <p className="text-sm text-gray-500">This driver hasn&apos;t provided a NIN yet.</p>
         )}
       </Card>
 

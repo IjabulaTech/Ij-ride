@@ -21,6 +21,8 @@ export interface User {
   last_name: string;
   email: string;
   role: Role;
+  nin: string;
+  nin_verified: boolean;
   date_joined: string;
 }
 
