@@ -3,7 +3,7 @@
  * out to subscribers. Used by the passenger (Module 10) and driver
  * (Module 11) screens. */
 import { getAccessToken } from "@/lib/auth/tokens";
-import type { OpenRide, Ride } from "@/types/api";
+import type { OpenRide, Ride, SupportMessage } from "@/types/api";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://127.0.0.1:8000/ws/rides/";
 const CLOSE_UNAUTHORIZED = 4401;
@@ -18,6 +18,7 @@ export type ServerMessage =
   | { type: "dispatch.request_closed"; ride_id: number }
   | { type: "dispatch.subscribed" }
   | { type: "dispatch.unsubscribed" }
+  | { type: "support.message"; message: SupportMessage; thread_id: number; user_id: number }
   | { type: "error"; detail: string };
 
 type Listener = (message: ServerMessage) => void;

@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/admin/rides", label: "Rides" },
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/commissions", label: "Commissions" },
+  { href: "/admin/support", label: "Support" },
   { href: "/admin/settings", label: "Fare settings" },
 ];
 

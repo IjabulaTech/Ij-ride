@@ -218,6 +218,29 @@ export interface AdminUser extends User {
   last_login: string | null;
 }
 
+/** One message in a customer-support conversation. */
+export interface SupportMessage {
+  id: number;
+  thread: number;
+  body: string;
+  from_admin: boolean;
+  sender_name: string;
+  created_at: string;
+}
+
+/** A user's support conversation, as shown in the admin inbox. */
+export interface SupportThread {
+  id: number;
+  user_id: number;
+  phone: string;
+  name: string;
+  role: Role;
+  last_message_at: string | null;
+  last_message_preview: string;
+  unread_for_admin: number;
+  created_at: string;
+}
+
 export interface AdminDriver {
   id: number;
   user: User;

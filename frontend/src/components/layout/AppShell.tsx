@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -46,7 +47,19 @@ export function AppShell({
               </span>
             )}
             {/* Ride sound control — passengers & drivers get audible alerts */}
-            {(user?.role === "PASSENGER" || user?.role === "DRIVER") && <SoundToggle />}
+            {(user?.role === "PASSENGER" || user?.role === "DRIVER") && (
+              <>
+                <SoundToggle />
+                <Link
+                  href="/support"
+                  aria-label="Help and support"
+                  title="Help & support"
+                  className="rounded-lg p-1.5 text-lg leading-none text-gray-600 hover:bg-gray-100"
+                >
+                  <span aria-hidden>💬</span>
+                </Link>
+              </>
+            )}
             <Button variant="ghost" onClick={handleLogout}>
               Log out
             </Button>

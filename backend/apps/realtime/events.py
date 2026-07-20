@@ -21,6 +21,45 @@ def user_group(user_id: int) -> str:
     return f"user_{user_id}"
 
 
+def support_admin_group() -> str:
+    """All signed-in admins — receives every support-chat message so the
+    inbox updates live regardless of which thread is open."""
+    return "support_admins"
+
+
+def broadcast_support_message(message) -> None:
+    message_id = message.pk
+    transaction.on_commit(lambda: _send_support_message(message_id))
+
+
+def _send_support_message(message_id: int) -> None:
+    # Local import: support.services imports this module at load time.
+    from apps.support.models import SupportMessage
+    from apps.support.serializers import SupportMessageSerializer
+
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    try:
+        message = SupportMessage.objects.select_related("thread", "thread__user", "sender").get(
+            pk=message_id
+        )
+    except SupportMessage.DoesNotExist:
+        return
+    try:
+        payload = {
+            "type": "support.message",
+            "message": SupportMessageSerializer(message).data,
+            "thread_id": message.thread_id,
+            "user_id": message.thread.user_id,
+        }
+        # The thread's owner, plus every admin watching the inbox
+        async_to_sync(channel_layer.group_send)(user_group(message.thread.user_id), payload)
+        async_to_sync(channel_layer.group_send)(support_admin_group(), payload)
+    except Exception:
+        logger.exception("Failed to broadcast support message %s", message_id)
+
+
 def broadcast_ride_event(ride, event_type: str) -> None:
     ride_id = ride.pk
     transaction.on_commit(lambda: _send_ride_event(ride_id, event_type))

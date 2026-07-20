@@ -11,4 +11,5 @@ urlpatterns = [
     path("management/", include("config.management_urls")),
     path("rides/", include("apps.rides.urls")),
     path("geo/", include("apps.geo.urls")),
+    path("support/", include("apps.support.urls")),
 ]

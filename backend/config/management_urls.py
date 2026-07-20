@@ -21,11 +21,18 @@ from apps.commissions.management_views import (
 from apps.payments.management_views import PaymentAdminDetailView, PaymentAdminListView
 from apps.pricing.management_views import FareSettingListCreateView
 from apps.rides.management_views import RideAdminDetailView, RideAdminListView
+from apps.support.management_views import SupportThreadListView, SupportThreadMessagesView
 
 app_name = "management"
 
 urlpatterns = [
     path("users/", UserListView.as_view(), name="user-list"),
+    path("support/threads/", SupportThreadListView.as_view(), name="support-thread-list"),
+    path(
+        "support/threads/<int:pk>/messages/",
+        SupportThreadMessagesView.as_view(),
+        name="support-thread-messages",
+    ),
     path("users/<int:pk>/verify-nin/", VerifyNinView.as_view(), name="user-verify-nin"),
     path("drivers/", DriverListView.as_view(), name="driver-list"),
     path("drivers/<int:pk>/", DriverDetailView.as_view(), name="driver-detail"),

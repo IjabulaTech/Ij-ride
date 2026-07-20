@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "apps.commissions",
     "apps.geo",
     "apps.realtime",
+    "apps.support",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

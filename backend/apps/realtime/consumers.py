@@ -1,7 +1,7 @@
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-from .events import dispatch_group, user_group
+from .events import dispatch_group, support_admin_group, user_group
 
 CLOSE_UNAUTHORIZED = 4401
 
@@ -28,8 +28,12 @@ class RideConsumer(AsyncJsonWebsocketConsumer):
         self.user_id = user.id
         self.user_group_name = user_group(user.id)
         self.dispatch_group_name: str | None = None
+        # Admins also watch the shared support inbox
+        self.support_group_name = support_admin_group() if user.is_admin_role else None
 
         await self.channel_layer.group_add(self.user_group_name, self.channel_name)
+        if self.support_group_name:
+            await self.channel_layer.group_add(self.support_group_name, self.channel_name)
         await self.accept()
 
         category = await self._dispatch_category()
@@ -48,6 +52,8 @@ class RideConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(self.user_group_name, self.channel_name)
         if getattr(self, "dispatch_group_name", None):
             await self.channel_layer.group_discard(self.dispatch_group_name, self.channel_name)
+        if getattr(self, "support_group_name", None):
+            await self.channel_layer.group_discard(self.support_group_name, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
         action = content.get("action")
@@ -108,4 +114,14 @@ class RideConsumer(AsyncJsonWebsocketConsumer):
     async def dispatch_request_closed(self, message):
         await self.send_json(
             {"type": "dispatch.request_closed", "ride_id": message["ride_id"]}
+        )
+
+    async def support_message(self, message):
+        await self.send_json(
+            {
+                "type": "support.message",
+                "message": message["message"],
+                "thread_id": message["thread_id"],
+                "user_id": message["user_id"],
+            }
         )
