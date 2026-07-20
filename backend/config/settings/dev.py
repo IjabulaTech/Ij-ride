@@ -24,6 +24,11 @@ if "test" in sys.argv:
     # GEO_PROVIDER/MAPBOX_ACCESS_TOKEN are set to locally. Tests must never
     # hit real Mapbox (billing + non-determinism + offline CI).
     GEO_PROVIDER = "stub"
+    # Blanking the tokens also keeps geo.routing.road_route() offline: it calls
+    # Mapbox Directions whenever a token is present, which would make live
+    # tracking tests hit the network (slow, flaky, billable).
+    MAPBOX_ACCESS_TOKEN = ""
+    GOOGLE_MAPS_API_KEY = ""
 
 CHANNEL_LAYERS = {
     "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},

@@ -85,14 +85,22 @@ class MyAvailabilityView(APIView):
 
 
 class MyLocationView(APIView):
-    """POST {"lat": ..., "lng": ...} — periodic location ping while online."""
+    """POST {"lat": ..., "lng": ...} — periodic location ping while online.
+
+    The driver app normally streams fixes over the WebSocket; this HTTP path is
+    the fallback when the socket is down, so it broadcasts live tracking too.
+    """
 
     permission_classes = [IsApprovedDriver]
 
     def post(self, request):
+        from apps.rides.tracking import record_driver_location
+
         serializer = LocationUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        availability = services.update_location(_my_profile(request), **serializer.validated_data)
+        record_driver_location(request.user, **serializer.validated_data)
+        availability = _my_profile(request).availability
+        availability.refresh_from_db()
         return Response(DriverAvailabilitySerializer(availability).data)
 
 

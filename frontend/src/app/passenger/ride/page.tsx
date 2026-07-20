@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { PaymentPanel } from "@/components/passenger/PaymentPanel";
 import { DriverCard } from "@/components/ride/DriverCard";
+import { LiveTrackingCard } from "@/components/ride/LiveTrackingCard";
 import { RideRoute } from "@/components/ride/RideRoute";
 import { RideStatusBadge } from "@/components/ride/RideStatusBadge";
 import { StatusStepper } from "@/components/ride/StatusStepper";
@@ -19,7 +20,7 @@ import { activeRide, cancelRide, getRide } from "@/lib/api/rides";
 import { formatDateTime, formatNaira } from "@/lib/format";
 import { useRideSocket } from "@/lib/hooks/useRideSocket";
 import { useRideStageSounds } from "@/lib/hooks/useRideStageSounds";
-import type { Ride, RideStatus } from "@/types/api";
+import type { DriverLocationEvent, Ride, RideStatus } from "@/types/api";
 
 const TERMINAL: RideStatus[] = ["COMPLETED", "CANCELLED", "EXPIRED"];
 // V1: passengers may only cancel while the search is still open.
@@ -34,6 +35,9 @@ export default function ActiveRidePage() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelBusy, setCancelBusy] = useState(false);
   const [error, setError] = useState("");
+  // Latest driver position streamed for this ride (drives the ETA readout)
+  const [driverLocation, setDriverLocation] = useState<DriverLocationEvent | null>(null);
+  const [locationAt, setLocationAt] = useState<number | null>(null);
   const rideIdRef = useRef<number | null>(null);
   rideIdRef.current = ride?.id ?? null;
 
@@ -57,10 +61,16 @@ export default function ActiveRidePage() {
   // completed / payment confirmed) — deduped, so re-fetches don't replay.
   useRideStageSounds(ride, "passenger");
 
-  // Live updates over WebSocket.
+  // Live updates over WebSocket: ride transitions plus the driver's position.
   useRideSocket((message) => {
     if (message.type === "ride.event" && message.ride.id === rideIdRef.current) {
       setRide(message.ride);
+    } else if (
+      message.type === "ride.driver_location" &&
+      message.ride_id === rideIdRef.current
+    ) {
+      setDriverLocation(message);
+      setLocationAt(Date.now());
     }
   });
 
@@ -154,7 +164,16 @@ export default function ActiveRidePage() {
             Notifying nearby drivers… this usually takes a moment.
           </p>
         )}
-        {ride.driver && <DriverCard driver={ride.driver} vehicle={ride.vehicle} />}
+        {ride.driver && (
+          <>
+            <LiveTrackingCard
+              event={driverLocation}
+              receivedAt={locationAt}
+              audience="passenger"
+            />
+            <DriverCard driver={ride.driver} vehicle={ride.vehicle} />
+          </>
+        )}
         {(ride.status === "ACCEPTED" || ride.status === "DRIVER_ARRIVED") && (
           <p className="text-xs text-gray-500">
             A driver has accepted your ride. If you need to cancel now, please contact support.

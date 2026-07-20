@@ -1,9 +1,37 @@
+import logging
+from decimal import Decimal, InvalidOperation
+
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .events import dispatch_group, support_admin_group, user_group
 
+logger = logging.getLogger(__name__)
+
 CLOSE_UNAUTHORIZED = 4401
+
+
+def _clean_number(value):
+    """Optional numeric telemetry (heading/speed/accuracy) -> float or None."""
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None  # drop NaN
+
+
+def _clean_coords(lat, lng):
+    """Validate a GPS fix, returning (lat, lng) as Decimals or None."""
+    try:
+        lat_d, lng_d = Decimal(str(lat)), Decimal(str(lng))
+    except (TypeError, ValueError, InvalidOperation):
+        return None
+    if not (-90 <= lat_d <= 90) or not (-180 <= lng_d <= 180):
+        return None
+    # Six decimal places matches the model columns (~0.1 m precision)
+    return lat_d.quantize(Decimal("0.000001")), lng_d.quantize(Decimal("0.000001"))
 
 
 class RideConsumer(AsyncJsonWebsocketConsumer):
@@ -76,6 +104,44 @@ class RideConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_discard(self.dispatch_group_name, self.channel_name)
             self.dispatch_group_name = None
             await self.send_json({"type": "dispatch.unsubscribed"})
+        elif action == "location":
+            await self._handle_location(content)
+
+    async def _handle_location(self, content):
+        """Driver streaming a GPS fix during an active trip. Streaming over the
+        socket (rather than an HTTP POST per fix) keeps mobile data and battery
+        use low. Silently ignored for non-drivers / drivers with no active ride."""
+        coords = _clean_coords(content.get("lat"), content.get("lng"))
+        if coords is None:
+            await self.send_json({"type": "error", "detail": "Invalid coordinates."})
+            return
+        lat, lng = coords
+        payload = await self._record_location(
+            lat,
+            lng,
+            _clean_number(content.get("heading")),
+            _clean_number(content.get("speed")),
+            _clean_number(content.get("accuracy")),
+        )
+        if payload is None:
+            # Stored for dispatch, but nothing to track — tell the client so it
+            # can back off its GPS polling.
+            await self.send_json({"type": "location.idle"})
+
+    @database_sync_to_async
+    def _record_location(self, lat, lng, heading, speed, accuracy):
+        from apps.rides.tracking import record_driver_location
+
+        user = self.scope["user"]
+        if not user.is_driver:
+            return None
+        try:
+            return record_driver_location(
+                user, lat=lat, lng=lng, heading=heading, speed=speed, accuracy=accuracy
+            )
+        except Exception:
+            logger.exception("Failed to record driver location for user %s", self.user_id)
+            return None
 
     async def _join_dispatch(self, category: str):
         # Vehicle category may have changed since the last join — move groups
@@ -114,6 +180,19 @@ class RideConsumer(AsyncJsonWebsocketConsumer):
     async def dispatch_request_closed(self, message):
         await self.send_json(
             {"type": "dispatch.request_closed", "ride_id": message["ride_id"]}
+        )
+
+    async def ride_driver_location(self, message):
+        await self.send_json(
+            {
+                "type": "ride.driver_location",
+                "ride_id": message["ride_id"],
+                "status": message["status"],
+                "location": message["location"],
+                "target": message["target"],
+                "straight_line_m": message["straight_line_m"],
+                "eta": message["eta"],
+            }
         )
 
     async def support_message(self, message):

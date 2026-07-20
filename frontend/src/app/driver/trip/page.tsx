@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { DriverPaymentPanel } from "@/components/driver/DriverPaymentPanel";
+import { LiveTrackingCard } from "@/components/ride/LiveTrackingCard";
 import { RideRoute } from "@/components/ride/RideRoute";
 import { RideStatusBadge } from "@/components/ride/RideStatusBadge";
 import { Alert } from "@/components/ui/Alert";
@@ -22,9 +23,10 @@ import {
   startTrip,
 } from "@/lib/api/rides";
 import { formatNaira, PAYMENT_METHOD_LABELS } from "@/lib/format";
+import { useDriverLocationStream } from "@/lib/hooks/useDriverLocationStream";
 import { useRideSocket } from "@/lib/hooks/useRideSocket";
 import { useRideStageSounds } from "@/lib/hooks/useRideStageSounds";
-import type { Ride, RideStatus } from "@/types/api";
+import type { DriverLocationEvent, Ride, RideStatus } from "@/types/api";
 
 const TERMINAL: RideStatus[] = ["COMPLETED", "CANCELLED", "EXPIRED"];
 
@@ -45,6 +47,8 @@ export default function DriverTripPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelBusy, setCancelBusy] = useState(false);
   const [error, setError] = useState("");
+  const [liveLocation, setLiveLocation] = useState<DriverLocationEvent | null>(null);
+  const [locationAt, setLocationAt] = useState<number | null>(null);
   const rideIdRef = useRef<number | null>(null);
   rideIdRef.current = ride?.id ?? null;
 
@@ -67,11 +71,22 @@ export default function DriverTripPage() {
   // active ride is cancelled. Deduped against re-fetches / reconnects.
   useRideStageSounds(ride, "driver");
 
-  useRideSocket((message) => {
+  const socketRef = useRideSocket((message) => {
     if (message.type === "ride.event" && message.ride.id === rideIdRef.current) {
       setRide(message.ride);
+    } else if (
+      message.type === "ride.driver_location" &&
+      message.ride_id === rideIdRef.current
+    ) {
+      // Echoed back to the driver so both screens show the same ETA
+      setLiveLocation(message);
+      setLocationAt(Date.now());
     }
   });
+
+  // Stream GPS while the trip is running (stops automatically once terminal)
+  const trackingActive = !!ride && !TERMINAL.includes(ride.status);
+  const gpsState = useDriverLocationStream(socketRef, trackingActive);
 
   useEffect(() => {
     if (!ride || TERMINAL.includes(ride.status)) return;
@@ -161,6 +176,19 @@ export default function DriverTripPage() {
             Call
           </a>
         </div>
+
+        <LiveTrackingCard event={liveLocation} receivedAt={locationAt} audience="driver" />
+        {gpsState === "denied" && (
+          <Alert tone="error">
+            Location is blocked, so the passenger can&apos;t see you moving. Enable location
+            access for this site in your browser settings.
+          </Alert>
+        )}
+        {gpsState === "unavailable" && (
+          <Alert tone="info">
+            Waiting for a GPS signal — tracking resumes automatically once it returns.
+          </Alert>
+        )}
 
         <RideRoute pickup={ride.pickup_address} dropoff={ride.dropoff_address} />
         {error && <Alert tone="error">{error}</Alert>}

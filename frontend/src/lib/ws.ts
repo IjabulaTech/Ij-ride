@@ -3,7 +3,7 @@
  * out to subscribers. Used by the passenger (Module 10) and driver
  * (Module 11) screens. */
 import { getAccessToken } from "@/lib/auth/tokens";
-import type { OpenRide, Ride, SupportMessage } from "@/types/api";
+import type { DriverLocationEvent, OpenRide, Ride, SupportMessage } from "@/types/api";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://127.0.0.1:8000/ws/rides/";
 const CLOSE_UNAUTHORIZED = 4401;
@@ -19,7 +19,19 @@ export type ServerMessage =
   | { type: "dispatch.subscribed" }
   | { type: "dispatch.unsubscribed" }
   | { type: "support.message"; message: SupportMessage; thread_id: number; user_id: number }
+  | ({ type: "ride.driver_location" } & DriverLocationEvent)
+  /** Sent back when a driver streams GPS with no active trip — back off. */
+  | { type: "location.idle" }
   | { type: "error"; detail: string };
+
+/** A GPS fix streamed by the driver's device. */
+export interface LocationFix {
+  lat: number;
+  lng: number;
+  heading?: number | null;
+  speed?: number | null;
+  accuracy?: number | null;
+}
 
 type Listener = (message: ServerMessage) => void;
 
@@ -42,8 +54,18 @@ export class RideSocket {
   }
 
   send(action: string): void {
+    this.sendJson({ action });
+  }
+
+  /** Stream a GPS fix while a trip is running. Sending over the open socket
+   * (instead of an HTTP POST per fix) keeps mobile data and battery use low. */
+  sendLocation(fix: LocationFix): void {
+    this.sendJson({ action: "location", ...fix });
+  }
+
+  private sendJson(payload: Record<string, unknown>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ action }));
+      this.ws.send(JSON.stringify(payload));
     }
   }
 

@@ -218,6 +218,41 @@ export interface AdminUser extends User {
   last_login: string | null;
 }
 
+// ---- live ride tracking ----
+export interface LiveDriverLocation {
+  lat: string;
+  lng: string;
+  /** Degrees clockwise from north; null when the device can't determine it. */
+  heading: number | null;
+  /** Metres per second. */
+  speed: number | null;
+  accuracy: number | null;
+}
+
+export interface LiveTarget {
+  kind: "pickup" | "dropoff";
+  lat: string;
+  lng: string;
+  address: string;
+}
+
+export interface LiveEta {
+  distance_m: number;
+  duration_s: number;
+  /** "route" from the routing provider, "estimate" when it was unavailable. */
+  source: string;
+}
+
+/** Payload of a `ride.driver_location` WebSocket event. */
+export interface DriverLocationEvent {
+  ride_id: number;
+  status: RideStatus;
+  location: LiveDriverLocation;
+  target: LiveTarget;
+  straight_line_m: number;
+  eta: LiveEta;
+}
+
 /** One message in a customer-support conversation. */
 export interface SupportMessage {
   id: number;

@@ -180,3 +180,86 @@ class RealtimeTests(TransactionTestCase):
         # CAR driver receives nothing for the KEKE request
         self.assertTrue(await d_comm.receive_nothing(timeout=0.5))
         await d_comm.disconnect()
+
+    async def test_driver_location_streams_to_passenger(self):
+        """Phase 1 live tracking: a GPS fix sent by the driver over the socket
+        reaches the passenger with target, distance and ETA attached."""
+        admin, passenger, driver = await self._setup_world()
+
+        p_comm, _ = await self._connect(passenger)
+        d_comm, _ = await self._connect(driver)
+
+        ride = await self._create_ride(passenger)
+        await d_comm.receive_json_from()  # dispatch.new_request
+        await p_comm.receive_json_from()  # ride.event REQUESTED
+        await self._accept(ride, driver)
+        await p_comm.receive_json_from()  # ride.event ACCEPTED
+        for _ in range(2):
+            await d_comm.receive_json_from()  # ride.event + dispatch.request_closed
+
+        # Driver streams a position a little north of the pickup
+        await d_comm.send_json_to(
+            {"action": "location", "lat": "6.610000", "lng": "3.352000", "heading": 180, "speed": 8}
+        )
+
+        msg = await p_comm.receive_json_from()
+        self.assertEqual(msg["type"], "ride.driver_location")
+        self.assertEqual(msg["ride_id"], ride.pk)
+        self.assertEqual(msg["location"]["lat"], "6.610000")
+        self.assertEqual(msg["location"]["heading"], 180.0)
+        # Before pickup the driver is heading to the passenger
+        self.assertEqual(msg["target"]["kind"], "pickup")
+        self.assertEqual(msg["target"]["address"], PICKUP["address"])
+        self.assertGreater(msg["straight_line_m"], 0)
+        self.assertGreater(msg["eta"]["duration_s"], 0)
+        # The driver receives the same payload so both screens agree
+        echo = await d_comm.receive_json_from()
+        self.assertEqual(echo["type"], "ride.driver_location")
+        self.assertEqual(echo["eta"], msg["eta"])
+
+        await p_comm.disconnect()
+        await d_comm.disconnect()
+
+    async def test_location_target_switches_to_dropoff_after_pickup(self):
+        admin, passenger, driver = await self._setup_world()
+        p_comm, _ = await self._connect(passenger)
+        d_comm, _ = await self._connect(driver)
+
+        ride = await self._create_ride(passenger)
+        await d_comm.receive_json_from()
+        await p_comm.receive_json_from()
+        await self._accept(ride, driver)
+        await p_comm.receive_json_from()
+        for _ in range(2):
+            await d_comm.receive_json_from()
+
+        for action in ("arrived", "start"):
+            await self._transition(ride, driver, action)
+            await p_comm.receive_json_from()
+            await d_comm.receive_json_from()
+
+        await d_comm.send_json_to({"action": "location", "lat": "6.560000", "lng": "3.360000"})
+        msg = await p_comm.receive_json_from()
+        self.assertEqual(msg["type"], "ride.driver_location")
+        self.assertEqual(msg["status"], "IN_PROGRESS")
+        self.assertEqual(msg["target"]["kind"], "dropoff")
+        self.assertEqual(msg["target"]["address"], DROPOFF["address"])
+
+        await p_comm.disconnect()
+        await d_comm.disconnect()
+
+    async def test_invalid_coordinates_rejected(self):
+        admin, passenger, driver = await self._setup_world()
+        d_comm, _ = await self._connect(driver)
+        await d_comm.send_json_to({"action": "location", "lat": "999", "lng": "3.35"})
+        msg = await d_comm.receive_json_from()
+        self.assertEqual(msg["type"], "error")
+        await d_comm.disconnect()
+
+    async def test_location_without_active_ride_reports_idle(self):
+        admin, passenger, driver = await self._setup_world()
+        d_comm, _ = await self._connect(driver)
+        await d_comm.send_json_to({"action": "location", "lat": "6.60", "lng": "3.35"})
+        msg = await d_comm.receive_json_from()
+        self.assertEqual(msg["type"], "location.idle")
+        await d_comm.disconnect()
