@@ -93,6 +93,9 @@ export function LiveMap({
     loadGoogleMaps()
       .then((maps) => {
         if (cancelled || !containerRef.current) return;
+        if (typeof maps.Map !== "function") {
+          throw new Error("maps.Map unavailable");
+        }
         const map = new maps.Map(containerRef.current, {
           center: driver ?? target,
           zoom: 14,
@@ -121,7 +124,11 @@ export function LiveMap({
         });
         setReady(true);
       })
-      .catch((err: Error) => !cancelled && setError(err.message));
+      .catch((err: Error) => {
+        // Keep the real cause in the console; users get something readable.
+        console.error("LiveMap failed to initialise:", err);
+        if (!cancelled) setError("Map could not load. Tracking details still update below.");
+      });
     return () => {
       cancelled = true;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
