@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { LiveMap } from "@/components/map/LiveMap";
 import { PaymentPanel } from "@/components/passenger/PaymentPanel";
 import { DriverCard } from "@/components/ride/DriverCard";
 import { LiveTrackingCard } from "@/components/ride/LiveTrackingCard";
@@ -19,7 +18,6 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api/client";
 import { activeRide, cancelRide, getRide } from "@/lib/api/rides";
 import { formatDateTime, formatNaira } from "@/lib/format";
-import { useMyLocation } from "@/lib/hooks/useMyLocation";
 import { useRideSocket } from "@/lib/hooks/useRideSocket";
 import { useRideStageSounds } from "@/lib/hooks/useRideStageSounds";
 import type { DriverLocationEvent, Ride, RideStatus } from "@/types/api";
@@ -75,9 +73,6 @@ export default function ActiveRidePage() {
       setLocationAt(Date.now());
     }
   });
-
-  // The passenger's own position, for their marker on the map
-  const myLocation = useMyLocation(!!ride && !TERMINAL.includes(ride.status));
 
   // Poll fallback while the ride is active (covers dropped sockets).
   useEffect(() => {
@@ -156,29 +151,6 @@ export default function ActiveRidePage() {
   }
 
   // ---- active ride ----
-  // Trust the server's idea of the current leg; fall back to the ride status
-  // before the first location event arrives.
-  const mapTarget = driverLocation
-    ? {
-        lat: Number(driverLocation.target.lat),
-        lng: Number(driverLocation.target.lng),
-        label: driverLocation.target.address,
-        kind: driverLocation.target.kind,
-      }
-    : ride.status === "IN_PROGRESS"
-      ? {
-          lat: Number(ride.dropoff_lat),
-          lng: Number(ride.dropoff_lng),
-          label: ride.dropoff_address,
-          kind: "dropoff" as const,
-        }
-      : {
-          lat: Number(ride.pickup_lat),
-          lng: Number(ride.pickup_lng),
-          label: ride.pickup_address,
-          kind: "pickup" as const,
-        };
-
   return (
     <div className="space-y-4">
       <Card className="space-y-4">
@@ -194,21 +166,6 @@ export default function ActiveRidePage() {
         )}
         {ride.driver && (
           <>
-            <LiveMap
-              className="h-64"
-              driver={
-                driverLocation
-                  ? {
-                      lat: Number(driverLocation.location.lat),
-                      lng: Number(driverLocation.location.lng),
-                      heading: driverLocation.location.heading,
-                    }
-                  : null
-              }
-              target={mapTarget}
-              self={myLocation}
-              selfLabel="You"
-            />
             <LiveTrackingCard
               event={driverLocation}
               receivedAt={locationAt}
