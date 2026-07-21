@@ -28,23 +28,6 @@ class SuggestQuerySerializer(serializers.Serializer):
         return attrs
 
 
-class RouteQuerySerializer(serializers.Serializer):
-    """Two (lat, lng) points to draw a road route between."""
-
-    from_lat = serializers.DecimalField(
-        max_digits=9, decimal_places=6, min_value=Decimal("-90"), max_value=Decimal("90")
-    )
-    from_lng = serializers.DecimalField(
-        max_digits=9, decimal_places=6, min_value=Decimal("-180"), max_value=Decimal("180")
-    )
-    to_lat = serializers.DecimalField(
-        max_digits=9, decimal_places=6, min_value=Decimal("-90"), max_value=Decimal("90")
-    )
-    to_lng = serializers.DecimalField(
-        max_digits=9, decimal_places=6, min_value=Decimal("-180"), max_value=Decimal("180")
-    )
-
-
 class ReverseGeocodeQuerySerializer(serializers.Serializer):
     lat = serializers.DecimalField(
         max_digits=9, decimal_places=6, min_value=Decimal("-90"), max_value=Decimal("90")

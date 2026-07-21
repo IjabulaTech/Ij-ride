@@ -31,28 +31,3 @@ export function reverseGeocode(
   const params = new URLSearchParams({ lat, lng });
   return api(`/geo/reverse/?${params.toString()}`);
 }
-
-export interface RouteGeometry {
-  /** [lat, lng] pairs ready to hand to Leaflet. */
-  points: [number, number][];
-  distance_m: number;
-  duration_s: number;
-  /** "route" = real roads; "straight" = provider unavailable, direct line. */
-  source: string;
-}
-
-/** Road path between two points, for drawing the live-tracking route. */
-export function routeGeometry(
-  fromLat: number,
-  fromLng: number,
-  toLat: number,
-  toLng: number
-): Promise<RouteGeometry> {
-  const params = new URLSearchParams({
-    from_lat: String(fromLat),
-    from_lng: String(fromLng),
-    to_lat: String(toLat),
-    to_lng: String(toLng),
-  });
-  return api<RouteGeometry>(`/geo/route/?${params.toString()}`);
-}
