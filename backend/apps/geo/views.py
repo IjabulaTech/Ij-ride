@@ -3,7 +3,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .base import GeoServiceError
-from .serializers import ReverseGeocodeQuerySerializer, SuggestQuerySerializer
+from .routing import route_geometry
+from .serializers import (
+    ReverseGeocodeQuerySerializer,
+    RouteQuerySerializer,
+    SuggestQuerySerializer,
+)
 from .service import get_geo_provider
 
 
@@ -48,6 +53,26 @@ class SuggestView(APIView):
                     for s in results
                 ]
             }
+        )
+
+
+class RouteView(APIView):
+    """GET /api/v1/geo/route/?from_lat=&from_lng=&to_lat=&to_lng=
+
+    Road path for the live-tracking map. Always 200 — if the routing provider
+    is unavailable the response carries a straight two-point line so the map
+    still draws something sensible."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = RouteQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        data = query.validated_data
+        return Response(
+            route_geometry(
+                (data["from_lat"], data["from_lng"]), (data["to_lat"], data["to_lng"])
+            )
         )
 
 
