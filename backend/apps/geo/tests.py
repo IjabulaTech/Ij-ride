@@ -511,6 +511,41 @@ class GeoApiTests(APITestCase):
         resp = self.client.get(reverse("geo:suggest"))
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_route_endpoint_returns_drawable_points(self):
+        """The map needs a polyline; with no routing token configured this
+        degrades to a straight two-point line rather than failing."""
+        resp = self.client.get(
+            reverse("geo:route"),
+            {
+                "from_lat": "9.334500",
+                "from_lng": "12.494400",
+                "to_lat": "9.202800",
+                "to_lng": "12.481000",
+            },
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        points = resp.data["points"]
+        self.assertGreaterEqual(len(points), 2)
+        self.assertAlmostEqual(points[0][0], 9.3345, places=3)  # [lat, lng] order
+        self.assertAlmostEqual(points[-1][1], 12.4810, places=3)
+        self.assertGreater(resp.data["distance_m"], 0)
+        self.assertGreater(resp.data["duration_s"], 0)
+        self.assertIn(resp.data["source"], ("route", "straight"))
+
+    def test_route_endpoint_validates_coordinates(self):
+        resp = self.client.get(
+            reverse("geo:route"),
+            {"from_lat": "999", "from_lng": "12.4", "to_lat": "9.2", "to_lng": "12.4"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_route_endpoint_requires_auth(self):
+        self.client.force_authenticate(user=None)
+        resp = self.client.get(reverse("geo:route"), {
+            "from_lat": "9.2", "from_lng": "12.4", "to_lat": "9.3", "to_lng": "12.5",
+        })
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_reverse_endpoint(self):
         resp = self.client.get(
             reverse("geo:reverse"), {"lat": "9.3350", "lng": "12.4948"}

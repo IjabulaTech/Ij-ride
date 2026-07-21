@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { DriverPaymentPanel } from "@/components/driver/DriverPaymentPanel";
+import { LiveMap } from "@/components/map/LiveMap";
 import { LiveTrackingCard } from "@/components/ride/LiveTrackingCard";
 import { RideRoute } from "@/components/ride/RideRoute";
 import { RideStatusBadge } from "@/components/ride/RideStatusBadge";
@@ -131,6 +132,28 @@ export default function DriverTripPage() {
 
   if (loading || !ride) return <FullPageSpinner />;
 
+  // Current leg for the map — server's view first, ride status as the fallback
+  const mapTarget = liveLocation
+    ? {
+        lat: Number(liveLocation.target.lat),
+        lng: Number(liveLocation.target.lng),
+        label: liveLocation.target.address,
+        kind: liveLocation.target.kind,
+      }
+    : ride.status === "IN_PROGRESS"
+      ? {
+          lat: Number(ride.dropoff_lat),
+          lng: Number(ride.dropoff_lng),
+          label: ride.dropoff_address,
+          kind: "dropoff" as const,
+        }
+      : {
+          lat: Number(ride.pickup_lat),
+          lng: Number(ride.pickup_lng),
+          label: ride.pickup_address,
+          kind: "pickup" as const,
+        };
+
   const passenger = ride.passenger;
   const passengerName =
     [passenger.first_name, passenger.last_name].filter(Boolean).join(" ") || "Passenger";
@@ -177,6 +200,19 @@ export default function DriverTripPage() {
           </a>
         </div>
 
+        <LiveMap
+          className="h-64"
+          driver={
+            liveLocation
+              ? {
+                  lat: Number(liveLocation.location.lat),
+                  lng: Number(liveLocation.location.lng),
+                  heading: liveLocation.location.heading,
+                }
+              : null
+          }
+          target={mapTarget}
+        />
         <LiveTrackingCard event={liveLocation} receivedAt={locationAt} audience="driver" />
         {gpsState === "denied" && (
           <Alert tone="error">
