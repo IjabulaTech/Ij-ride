@@ -117,8 +117,9 @@ class OsmGeoProvider(GeoProvider):
         if not query.strip():
             return []
 
-        # 1) Local Yola dictionary wins the top slots
-        local_hits = poi_match(query, limit=min(3, limit))
+        # 1) Local Yola dictionary wins the top slots (every match up to `limit`,
+        # so category searches like "hotel" list all the curated hotels)
+        local_hits = poi_match(query, limit=limit)
         seen_labels: set[str] = set()
         results: list[Suggestion] = []
         for poi in local_hits:

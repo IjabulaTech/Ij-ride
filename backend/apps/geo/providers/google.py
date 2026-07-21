@@ -108,10 +108,13 @@ class GoogleGeoProvider(GeoProvider):
         if not query.strip():
             return []
 
-        # 1) Local Yola dictionary wins the top slots
+        # 1) Local Yola dictionary wins the top slots. We take every match up to
+        # `limit` (not a fixed 3) so a category search like "hotel" lists all the
+        # curated hotels even when Google is unavailable; Google then tops up any
+        # slots left over.
         seen: set[str] = set()
         results: list[Suggestion] = []
-        for poi in poi_match(query, limit=min(3, limit)):
+        for poi in poi_match(query, limit=limit):
             if poi.label.lower() in seen:
                 continue
             seen.add(poi.label.lower())

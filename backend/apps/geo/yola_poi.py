@@ -235,11 +235,39 @@ YOLA_POIS: tuple[LocalPOI, ...] = (
     ),
 
     # ---- Hotels & hospitality ----
+    # Coordinates verified against Google Places. Baked in so hotel search keeps
+    # working with no API key, no billing, and no dependency on a live provider.
     LocalPOI(
         "Madugu Rockview Hotel",
-        "Madugu Rockview Hotel, Jimeta, Yola North, Adamawa",
-        Decimal("9.260341"), Decimal("12.472910"),
-        "hotel", ("Rockview", "Madugu Hotel", "hotel"),
+        "Madugu Rockview Hotel, Behind Government House, Jimeta, Yola North, Adamawa",
+        Decimal("9.260408"), Decimal("12.473019"),
+        "hotel", ("Rockview", "Madugu Hotel"),
+    ),
+    LocalPOI(
+        "Yukuben Hotel",
+        "Yukuben Hotel, Off Barracks Road, Jimeta, Yola North, Adamawa",
+        Decimal("9.239428"), Decimal("12.440276"),
+        "hotel", ("Yukuben",),
+    ),
+    LocalPOI(
+        "Mope Hotel Numan",
+        "Mope Hotel, Numan, Adamawa",
+        Decimal("9.452162"), Decimal("12.059524"),
+        "hotel", ("Mope Hotel",),
+    ),
+
+    # ---- Pharmacies ----
+    LocalPOI(
+        "YB Alheri Pharmacy",
+        "YB Alheri Pharmacy, Jimeta, Yola North, Adamawa",
+        Decimal("9.271880"), Decimal("12.453476"),
+        "pharmacy", ("Alheri",),
+    ),
+    LocalPOI(
+        "Chin Gaba Pharmacy",
+        "Chin Gaba Pharmacy, Yola, Adamawa",
+        Decimal("9.206841"), Decimal("12.492592"),
+        "pharmacy", ("Chin Gaba",),
     ),
 
     # ---- Institutions verified from OpenStreetMap ----
@@ -296,20 +324,29 @@ YOLA_POIS: tuple[LocalPOI, ...] = (
 
 def match(query: str, limit: int = 5) -> list[LocalPOI]:
     """Return POIs whose label / address / any alias contains the query.
-    Case-insensitive substring match; longer matches beat shorter ones."""
+
+    Case-insensitive. Ranking has two tiers: names that START with the query
+    ("Yukuben" -> Yukuben Hotel) beat ones that merely contain it, and within a
+    tier the declared order wins. Declaration order is deliberately Yola-first,
+    so a category search like "hotel" lists Yola hotels before out-of-town ones
+    — ranking on where the word happens to appear would put "Mope Hotel Numan"
+    (50 km away) above the local ones.
+    """
     q = query.strip().lower()
     if not q:
         return []
     scored: list[tuple[int, int, LocalPOI]] = []
     for i, poi in enumerate(YOLA_POIS):
         haystacks = (poi.label, poi.address, *poi.aliases)
-        best_hit = -1
+        matched = prefix = False
         for h in haystacks:
-            idx = h.lower().find(q)
-            if idx != -1 and (best_hit == -1 or idx < best_hit):
-                best_hit = idx
-        if best_hit != -1:
-            # Prefer prefix matches (best_hit == 0) and preserve declared order for ties
-            scored.append((best_hit, i, poi))
+            haystack = h.lower()
+            if q in haystack:
+                matched = True
+                if haystack.startswith(q):
+                    prefix = True
+                    break
+        if matched:
+            scored.append((0 if prefix else 1, i, poi))
     scored.sort(key=lambda t: (t[0], t[1]))
     return [poi for _, _, poi in scored[:limit]]
