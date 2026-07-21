@@ -12,6 +12,7 @@ routing/fare math runs in the background via road_route().
 Requires GOOGLE_MAPS_API_KEY with "Places API (New)" and "Geocoding API"
 enabled. The key lives server-side only (never shipped to the browser).
 """
+import logging
 from decimal import ROUND_HALF_UP, Decimal
 
 import requests
@@ -26,6 +27,8 @@ from ..base import (
 )
 from ..routing import road_route
 from ..yola_poi import match as poi_match
+
+logger = logging.getLogger(__name__)
 
 TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
@@ -123,7 +126,10 @@ class GoogleGeoProvider(GeoProvider):
         try:
             places = self._text_search(query, remaining + 3)
         except GeoServiceError:
-            return results
+            # Google unavailable (billing lapsed, quota, outage). Rather than
+            # show the rider nothing, fill the rest from OpenStreetMap. Upgrades
+            # itself back to Google automatically once it works again.
+            return self._fallback_suggest(query, limit, proximity, results, seen)
         for place in places:
             s = self._place_to_suggestion(place)
             if not s:
@@ -138,11 +144,40 @@ class GoogleGeoProvider(GeoProvider):
                 break
         return results
 
+    # ---- OpenStreetMap fallback ----
+    @staticmethod
+    def _osm():
+        from .osm import OsmGeoProvider
+
+        return OsmGeoProvider()
+
+    def _fallback_suggest(self, query, limit, proximity, results, seen) -> list[Suggestion]:
+        """Top up `results` with OSM hits when Google can't answer."""
+        try:
+            hits = self._osm().suggest(query, limit=limit, proximity=proximity)
+        except Exception:
+            logger.warning("OSM fallback failed for %r", query, exc_info=True)
+            return results
+        for s in hits:
+            if len(results) >= limit:
+                break
+            if s.label.lower() in seen:
+                continue
+            seen.add(s.label.lower())
+            results.append(s)
+        return results
+
     def geocode(self, query: str) -> GeocodeResult:
-        for place in self._text_search(query, 1):
-            s = self._place_to_suggestion(place)
-            if s:
-                return GeocodeResult(address=s.address, lat=s.lat, lng=s.lng)
+        try:
+            for place in self._text_search(query, 1):
+                s = self._place_to_suggestion(place)
+                if s:
+                    return GeocodeResult(address=s.address, lat=s.lat, lng=s.lng)
+        except GeoServiceError:
+            # Same reasoning as suggest(): a typed address must still resolve to
+            # coordinates so the rider can get a fare estimate.
+            logger.warning("Google geocode unavailable; falling back to OSM")
+            return self._osm().geocode(query)
         raise AddressNotFoundError(query)
 
     def reverse_geocode(self, lat: Decimal, lng: Decimal) -> GeocodeResult:
@@ -162,6 +197,15 @@ class GoogleGeoProvider(GeoProvider):
             return GeocodeResult(
                 address=results[0].get("formatted_address", fallback), lat=lat, lng=lng
             )
+        # Google returned nothing usable (commonly REQUEST_DENIED when billing
+        # lapses). Try OSM before falling back to bare coordinates, so the rider
+        # sees a place name rather than "Pinned location (9.20…, 12.49…)".
+        try:
+            osm_result = self._osm().reverse_geocode(lat, lng)
+            if not osm_result.address.startswith("Pinned location"):
+                return osm_result
+        except Exception:
+            logger.warning("OSM reverse fallback failed", exc_info=True)
         return GeocodeResult(address=fallback, lat=lat, lng=lng)
 
     def route(self, origin, destination):

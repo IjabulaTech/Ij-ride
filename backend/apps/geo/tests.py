@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.services import register_passenger
 
-from .base import AddressNotFoundError, GeoServiceError
+from .base import AddressNotFoundError, GeocodeResult, GeoServiceError, Suggestion
 from .providers.google import GoogleGeoProvider
 from .providers.mapbox import MapboxGeoProvider
 from .providers.osm import OsmGeoProvider
@@ -408,10 +408,60 @@ class GoogleProviderTests(SimpleTestCase):
         self.assertIn("AUN", result.address)
         self.assertEqual(result.lat, Decimal("9.3350"))
 
-    def test_suggest_swallows_errors(self):
+    def test_suggest_falls_back_to_osm_when_google_is_down(self):
+        """Billing lapse / outage must not leave the rider with no results."""
         provider = GoogleGeoProvider()
+        osm_hit = Suggestion(
+            label="Madugu Rockview Hotel",
+            address="Madugu Rockview Hotel, Jimeta, Yola North, Adamawa",
+            lat=Decimal("9.260341"),
+            lng=Decimal("12.472910"),
+            place_type="hotel",
+            place_name="Madugu Rockview Hotel, Jimeta, Yola North, Adamawa",
+        )
+        fake_osm = mock.Mock()
+        fake_osm.suggest.return_value = [osm_hit]
         with mock.patch.object(provider.session, "post", return_value=self._response({}, status=500)):
-            self.assertEqual(provider.suggest("Zerofoo-nowhere"), [])
+            with mock.patch.object(GoogleGeoProvider, "_osm", return_value=fake_osm):
+                results = provider.suggest("Zerofoo-nowhere", limit=5)
+        self.assertEqual([r.label for r in results], ["Madugu Rockview Hotel"])
+        fake_osm.suggest.assert_called_once()
+
+    def test_suggest_returns_empty_when_both_providers_fail(self):
+        provider = GoogleGeoProvider()
+        fake_osm = mock.Mock()
+        fake_osm.suggest.side_effect = RuntimeError("osm down too")
+        with mock.patch.object(provider.session, "post", return_value=self._response({}, status=500)):
+            with mock.patch.object(GoogleGeoProvider, "_osm", return_value=fake_osm):
+                self.assertEqual(provider.suggest("Zerofoo-nowhere"), [])
+
+    def test_geocode_falls_back_to_osm(self):
+        provider = GoogleGeoProvider()
+        fake_osm = mock.Mock()
+        fake_osm.geocode.return_value = GeocodeResult(
+            address="Jimeta, Yola North, Adamawa",
+            lat=Decimal("9.267000"),
+            lng=Decimal("12.455000"),
+        )
+        with mock.patch.object(provider.session, "post", return_value=self._response({}, status=500)):
+            with mock.patch.object(GoogleGeoProvider, "_osm", return_value=fake_osm):
+                result = provider.geocode("Jimeta")
+        self.assertEqual(result.address, "Jimeta, Yola North, Adamawa")
+
+    def test_reverse_geocode_falls_back_to_osm_before_coordinates(self):
+        provider = GoogleGeoProvider()
+        fake_osm = mock.Mock()
+        fake_osm.reverse_geocode.return_value = GeocodeResult(
+            address="Modibbo Adama Way, Yola, Adamawa",
+            lat=Decimal("9.2035"),
+            lng=Decimal("12.4954"),
+        )
+        denied = {"status": "REQUEST_DENIED", "error_message": "billing", "results": []}
+        with mock.patch.object(provider.session, "get", return_value=self._response(denied)):
+            with mock.patch.object(GoogleGeoProvider, "_osm", return_value=fake_osm):
+                result = provider.reverse_geocode(Decimal("9.2035"), Decimal("12.4954"))
+        self.assertEqual(result.address, "Modibbo Adama Way, Yola, Adamawa")
+        self.assertNotIn("Pinned location", result.address)
 
     @override_settings(GOOGLE_MAPS_API_KEY="")
     def test_missing_key_degrades_gracefully(self):
