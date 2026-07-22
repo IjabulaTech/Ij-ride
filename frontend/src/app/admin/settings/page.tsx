@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
+import { MaintenanceCard } from "@/components/ops/MaintenanceCard";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -80,7 +81,11 @@ export default function FareSettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <h2 className="text-lg font-bold text-gray-900">Fare settings</h2>
+      <h2 className="text-lg font-bold text-gray-900">Settings</h2>
+
+      <MaintenanceCard />
+
+      <h3 className="pt-2 text-lg font-bold text-gray-900">Fare settings</h3>
 
       {CATEGORIES.map((category) => {
         const active = activeFor(category);

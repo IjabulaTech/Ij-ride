@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 
+import { MaintenanceGate } from "@/components/ops/MaintenanceGate";
 import { IosInstallPrompt } from "@/components/pwa/IosInstallPrompt";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
 import { AuthProvider } from "@/lib/auth/AuthContext";
@@ -62,7 +63,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <MaintenanceGate>{children}</MaintenanceGate>
+        </AuthProvider>
         <PwaRegister />
         <IosInstallPrompt />
       </body>

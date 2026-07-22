@@ -26,6 +26,8 @@ env = environ.Env(
     GEO_PROXIMITY=(str, "12.4954,9.2035"),  # lng,lat bias center (Yola, Adamawa)
     RIDE_SEARCH_TIMEOUT_MINUTES=(int, 10),
     PUBLIC_BASE_URL=(str, "http://127.0.0.1:8000"),
+    # Force maintenance mode on regardless of the DB toggle (fail-safe).
+    MAINTENANCE_MODE=(bool, False),
     # NIN verification provider. "stub" = format check + manual admin review.
     # Swap for a licensed aggregator (Dojah/Smile ID/…) when available.
     NIN_PROVIDER=(str, "stub"),
@@ -64,6 +66,7 @@ INSTALLED_APPS = [
     "apps.geo",
     "apps.realtime",
     "apps.support",
+    "apps.ops",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -78,6 +81,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Blocks rider/driver API calls while maintenance mode is on. Last, so the
+    # admin API and auth (its exempt paths) are already routable.
+    "apps.ops.middleware.MaintenanceModeMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -145,6 +151,9 @@ GEO_PROXIMITY = env("GEO_PROXIMITY")
 
 # A SEARCHING ride nobody accepts within this window becomes EXPIRED
 RIDE_SEARCH_TIMEOUT_MINUTES = env("RIDE_SEARCH_TIMEOUT_MINUTES")
+
+# Fail-safe override for maintenance mode (the DB toggle is the normal switch)
+MAINTENANCE_MODE = env("MAINTENANCE_MODE")
 
 # NIN verification provider (see apps/accounts/nin_verification.py)
 NIN_PROVIDER = env("NIN_PROVIDER")
