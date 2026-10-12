@@ -93,6 +93,11 @@ export default function LoginPage() {
               Sign up as a driver
             </Link>
           </p>
+          <p className="pt-1 text-xs text-gray-400">
+            <Link href="/privacy" className="hover:underline">
+              Privacy Policy
+            </Link>
+          </p>
         </div>
       </form>
     </AuthPageFrame>

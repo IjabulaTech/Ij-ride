@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/ui/BrandLogo";
@@ -17,8 +18,13 @@ const POLL_MS = 30_000;
  * maintenance mode is on. Admins pass straight through so they can keep
  * working (and switch it back off). Re-checks periodically, so the app comes
  * back on its own without anyone refreshing. */
+// Always reachable, even during maintenance — app-store reviewers and users
+// must be able to read legal pages at any time.
+const ALWAYS_OPEN = ["/privacy", "/terms"];
+
 export function MaintenanceGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [state, setState] = useState<{ on: boolean; message: string }>({
     on: false,
     message: "",
@@ -42,8 +48,10 @@ export function MaintenanceGate({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Admins keep full access — they're the ones doing the maintenance.
-  if (!state.on || user?.role === "ADMIN") return <>{children}</>;
+  // Admins keep full access — they're the ones doing the maintenance. Legal
+  // pages stay open to everyone.
+  const exempt = ALWAYS_OPEN.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (!state.on || exempt || user?.role === "ADMIN") return <>{children}</>;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-gray-50 px-6 text-center">
